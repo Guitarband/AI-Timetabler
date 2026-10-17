@@ -1,0 +1,15 @@
+{
+  "term": "Fall 2026",
+  "demo": false,
+  "students": {},
+  "required_groups": {
+    "COMP 1000": ["2026-comp1000-lecture", "2026-comp1000-lab"]
+  },
+  "capacities": {"comp-l01": 40, "comp-l02": 40, "comp-b01": 20, "comp-b02": 0},
+  "sections": [
+    {"key":"comp-l01","group":"2026-comp1000-lecture","code":"COMP 1000","title":"Introduction to Computing","kind":"Lecture","section":"L-01","day":2,"start":"09:00","end":"10:00","room":"Computing Theatre","credits":3},
+    {"key":"comp-l02","group":"2026-comp1000-lecture","code":"COMP 1000","title":"Introduction to Computing","kind":"Lecture","section":"L-02","day":4,"start":"15:00","end":"16:00","room":"Computing Theatre","credits":3},
+    {"key":"comp-b01","group":"2026-comp1000-lab","code":"COMP 1000","title":"Introduction to Computing","kind":"Lab","section":"B-01","day":3,"start":"13:00","end":"14:00","room":"Computing Lab C","credits":3},
+    {"key":"comp-b02","group":"2026-comp1000-lab","code":"COMP 1000","title":"Introduction to Computing","kind":"Lab","section":"B-02","day":5,"start":"11:00","end":"12:00","room":"Computing Lab D","credits":3}
+  ]
+}

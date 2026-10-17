@@ -1,0 +1,339 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                   String               @id
+  name                 String
+  email                String
+  studentId            String?              @unique
+  emailVerified        Boolean              @default(false)
+  image                String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  sessions             Session[]
+  accounts             Account[]
+  preference           TimetablePreference?
+  friendshipsAsA       Friendship[]         @relation("FriendshipUserA")
+  friendshipsAsB       Friendship[]         @relation("FriendshipUserB")
+  peerRequestsSent     PeerDataRequest[]    @relation("PeerRequestSender")
+  peerRequestsReceived PeerDataRequest[]    @relation("PeerRequestRecipient")
+  courseApprovals      CourseApproval[]
+  timetables           StudentTimetable[]
+  enrolments           ClassEnrolment[]
+  planFamilies         PlanFamily[]
+  savedTimetables      SavedTimetable[]
+  timetableLibraries   TimetableLibrary[]
+  courseOnboardings     CourseOnboarding[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+// Account-owned planner snapshots. Booking/capacity authority remains in planner_plan
+// and class_enrolment; these records preserve named workspaces and conversations.
+model SavedTimetable {
+  userId      String
+  mode        String
+  id          String
+  name        String
+  term        String
+  planVersion Int?
+  confirmed   Boolean  @default(false)
+  snapshot    Json
+  revision    Int      @default(1)
+  mutationId  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, mode, id])
+  @@index([userId, mode, updatedAt])
+  @@map("saved_timetable")
+}
+
+model TimetableLibrary {
+  userId   String
+  mode     String
+  activeId String?
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, mode])
+  @@map("timetable_library")
+}
+
+model AcademicTerm {
+  id         String             @id
+  name       String
+  groups     CourseClass[]
+  approvals  CourseApproval[]
+  timetables StudentTimetable[]
+  families   PlanFamily[]
+
+  @@map("academic_term")
+}
+
+model Course {
+  code      String           @id
+  title     String
+  credits   Int
+  faculty   String           @default("Other faculties")
+  description String         @default("")
+  classes   CourseClass[]
+  approvals CourseApproval[]
+
+  @@map("course")
+}
+
+model CourseOnboarding {
+  userId      String
+  mode        String
+  termId      String
+  courseCodes String[]
+  updatedAt   DateTime @default(now()) @updatedAt
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, mode, termId])
+  @@map("course_onboarding")
+}
+
+// A required class type, e.g. PSYC lecture or PSYC tutorial, within one term.
+model CourseClass {
+  id         String           @id
+  courseCode String
+  termId     String
+  kind       String
+  course     Course           @relation(fields: [courseCode], references: [code])
+  term       AcademicTerm     @relation(fields: [termId], references: [id])
+  options    ClassOption[]
+  entries    TimetableEntry[]
+  enrolments ClassEnrolment[]
+
+  @@unique([id, termId])
+  @@index([termId, courseCode])
+  @@map("course_class")
+}
+
+// Each option is an alternative weekly time for the same required class.
+model ClassOption {
+  id          String           @id
+  classId     String
+  label       String
+  day         Int
+  startMinute Int
+  endMinute   Int
+  room        String
+  capacity    Int
+  enabled     Boolean          @default(true)
+  courseClass CourseClass      @relation(fields: [classId], references: [id])
+  entries     TimetableEntry[]
+  enrolments  ClassEnrolment[]
+
+  @@unique([id, classId])
+  @@unique([classId, label])
+  @@map("class_option")
+}
+
+model CourseApproval {
+  userId     String
+  termId     String
+  courseCode String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  term       AcademicTerm @relation(fields: [termId], references: [id])
+  course     Course       @relation(fields: [courseCode], references: [code])
+
+  @@id([userId, termId, courseCode])
+  @@map("course_approval")
+}
+
+// Latest draft is discoverable for prototype matching. Drafts do not occupy seats.
+model StudentTimetable {
+  id        String           @id
+  userId    String
+  termId    String
+  planId    String?
+  updatedAt DateTime         @default(now()) @updatedAt
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  term      AcademicTerm     @relation(fields: [termId], references: [id])
+  entries   TimetableEntry[]
+
+  @@unique([userId, termId])
+  @@unique([id, termId])
+  @@map("student_timetable")
+}
+
+model TimetableEntry {
+  timetableId String
+  termId      String
+  classId     String
+  optionId    String
+  timetable   StudentTimetable @relation(fields: [timetableId, termId], references: [id, termId], onDelete: Cascade)
+  courseClass CourseClass      @relation(fields: [classId, termId], references: [id, termId])
+  option      ClassOption      @relation(fields: [optionId, classId], references: [id, classId])
+
+  @@id([timetableId, classId])
+  @@map("timetable_entry")
+}
+
+// Authoritative occupancy: one enrolment per student and required class.
+model ClassEnrolment {
+  userId      String
+  classId     String
+  optionId    String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseClass CourseClass @relation(fields: [classId], references: [id])
+  option      ClassOption @relation(fields: [optionId, classId], references: [id, classId])
+
+  @@id([userId, classId])
+  @@index([optionId])
+  @@map("class_enrolment")
+}
+
+model PlanFamily {
+  id           String        @id
+  ownerId      String
+  termId       String
+  head         String
+  confirmation Json?
+  owner        User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  term         AcademicTerm  @relation(fields: [termId], references: [id])
+  plans        PlannerPlan[]
+
+  @@index([ownerId, termId])
+  @@map("plan_family")
+}
+
+model PlannerPlan {
+  id        String     @id
+  familyId  String
+  parentId  String?
+  body      Json
+  createdAt DateTime   @default(now())
+  family    PlanFamily @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([familyId])
+  @@map("planner_plan")
+}
+
+enum Weekday {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+model TimetablePreference {
+  userId              String    @id
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  earliestStartMinute Int       @default(540)
+  latestEndMinute     Int       @default(1080)
+  preferredDays       Weekday[] @default([])
+  avoidedDays         Weekday[] @default([])
+  maxCampusDays       Int?
+  prioritizeFriends   Boolean   @default(true)
+  updatedAt           DateTime  @updatedAt
+
+  @@map("timetable_preference")
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+model Friendship {
+  id            String           @id @default(cuid())
+  userAId       String
+  userBId       String
+  userA         User             @relation("FriendshipUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB         User             @relation("FriendshipUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  requestedById String
+  status        FriendshipStatus @default(PENDING)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@unique([userAId, userBId])
+  @@index([userAId, status])
+  @@index([userBId, status])
+  @@map("friendship")
+}
+
+enum PeerDataRequestStatus {
+  PENDING
+  ACCEPTED
+  PARTIAL
+  DENIED
+}
+
+model PeerDataRequest {
+  id          String                @id @default(cuid())
+  requesterId String
+  recipientId String
+  requester   User                  @relation("PeerRequestSender", fields: [requesterId], references: [id], onDelete: Cascade)
+  recipient   User                  @relation("PeerRequestRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  status      PeerDataRequestStatus @default(PENDING)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  respondedAt DateTime?
+
+  @@unique([requesterId, recipientId])
+  @@index([recipientId, status])
+  @@map("peer_data_request")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}

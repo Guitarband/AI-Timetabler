@@ -1,0 +1,178 @@
+{
+  "term": "Fall 2026",
+  "demo": true,
+  "sections": [
+    {
+      "key": "psyc-l02",
+      "code": "PSYC 1010",
+      "title": "Introduction to Psychology",
+      "kind": "Lecture",
+      "section": "L-02",
+      "day": 1,
+      "start": "10:00",
+      "end": "11:30",
+      "room": "Hale Hall 204",
+      "credits": 3,
+      "group": "psyc-1010-lecture"
+    },
+    {
+      "key": "psyc-t05",
+      "code": "PSYC 1010",
+      "title": "Introduction to Psychology",
+      "kind": "Tutorial",
+      "section": "T-05",
+      "day": 3,
+      "start": "10:00",
+      "end": "11:00",
+      "room": "Kerr 105",
+      "credits": 3,
+      "group": "psyc-1010-tutorial"
+    },
+    {
+      "key": "stat-l01",
+      "code": "STAT 2010",
+      "title": "Statistics for Behavioural Science",
+      "kind": "Lecture",
+      "section": "L-01",
+      "day": 2,
+      "start": "11:00",
+      "end": "12:30",
+      "room": "Maud Building 1",
+      "credits": 3,
+      "group": "stat-2010-lecture"
+    },
+    {
+      "key": "stat-b04",
+      "code": "STAT 2010",
+      "title": "Statistics for Behavioural Science",
+      "kind": "Lab",
+      "section": "B-04",
+      "day": 2,
+      "start": "14:00",
+      "end": "15:30",
+      "room": "Computing Lab B",
+      "credits": 3,
+      "group": "stat-2010-lab"
+    },
+    {
+      "key": "biol-w02",
+      "code": "BIOL 1020",
+      "title": "Cells and Organisms",
+      "kind": "Lab",
+      "section": "W-02",
+      "day": 1,
+      "start": "13:00",
+      "end": "14:30",
+      "room": "Wet Lab 3",
+      "credits": 3,
+      "group": "biol-1020-lab"
+    },
+    {
+      "key": "biol-l03",
+      "code": "BIOL 1020",
+      "title": "Cells and Organisms",
+      "kind": "Lecture",
+      "section": "L-03",
+      "day": 4,
+      "start": "10:30",
+      "end": "12:00",
+      "room": "Science Theatre 2",
+      "credits": 3,
+      "group": "biol-1020-lecture"
+    },
+    {
+      "key": "writ-w01",
+      "code": "WRIT 1000",
+      "title": "Academic Writing",
+      "kind": "Workshop",
+      "section": "W-01",
+      "day": 3,
+      "start": "15:00",
+      "end": "16:30",
+      "room": "Studio 2",
+      "credits": 3,
+      "group": "writ-1000-workshop"
+    },
+    {
+      "key": "writ-w03",
+      "code": "WRIT 1000",
+      "title": "Academic Writing",
+      "kind": "Workshop",
+      "section": "W-03",
+      "day": 3,
+      "start": "11:30",
+      "end": "13:00",
+      "room": "Studio 4",
+      "credits": 3,
+      "group": "writ-1000-workshop"
+    },
+    {
+      "key": "phil-s02",
+      "code": "PHIL 1100",
+      "title": "Introduction to Philosophy",
+      "kind": "Seminar",
+      "section": "S-02",
+      "day": 4,
+      "start": "13:00",
+      "end": "14:30",
+      "room": "Kerr 210",
+      "credits": 3,
+      "group": "phil-1100-seminar"
+    },
+    {
+      "key": "phil-s01",
+      "code": "PHIL 1100",
+      "title": "Introduction to Philosophy",
+      "kind": "Seminar",
+      "section": "S-01",
+      "day": 5,
+      "start": "09:00",
+      "end": "10:30",
+      "room": "Kerr 210",
+      "credits": 3,
+      "group": "phil-1100-seminar"
+    }
+  ],
+  "required_groups": {
+    "PSYC 1010": [
+      "psyc-1010-lecture",
+      "psyc-1010-tutorial"
+    ],
+    "STAT 2010": [
+      "stat-2010-lecture",
+      "stat-2010-lab"
+    ],
+    "BIOL 1020": [
+      "biol-1020-lab",
+      "biol-1020-lecture"
+    ],
+    "WRIT 1000": [
+      "writ-1000-workshop"
+    ],
+    "PHIL 1100": [
+      "phil-1100-seminar"
+    ]
+  },
+  "demo_profile": {
+    "approved_courses": [
+      "PSYC 1010",
+      "STAT 2010",
+      "BIOL 1020",
+      "WRIT 1000",
+      "PHIL 1100"
+    ],
+    "friends": {
+      "Maya Okafor": [
+        "psyc-l02",
+        "stat-l01",
+        "phil-s01"
+      ],
+      "Leo Chen": [
+        "psyc-l02",
+        "writ-w03",
+        "phil-s02"
+      ]
+    }
+  },
+  "students": {}
+}

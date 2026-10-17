@@ -1,0 +1,2 @@
+# Keep text checkouts consistent with Biome; binary assets remain binary.
+* text=auto eol=lf
