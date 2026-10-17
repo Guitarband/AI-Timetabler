@@ -1,11 +1,17 @@
 import { isMonashEmail } from "@/lib/monash-email";
 
-// Explicitly opt in for local development; production always verifies ownership.
+// The production bypass is limited to the sample-data MVP demo and requires two
+// explicit server configuration flags. Real planner deployments always verify.
 export function requiresEmailVerification() {
-  return !(
-    process.env.NODE_ENV === "development" &&
-    process.env.AUTH_REQUIRE_EMAIL_VERIFICATION === "false"
-  );
+  const verificationDisabled =
+    process.env.AUTH_REQUIRE_EMAIL_VERIFICATION === "false";
+  const localBypass = process.env.NODE_ENV === "development";
+  const demoBypass =
+    process.env.NODE_ENV === "production" &&
+    process.env.AUTH_ALLOW_UNVERIFIED_DEMO === "true" &&
+    process.env.NEXT_PUBLIC_USE_MOCK === "true";
+
+  return !(verificationDisabled && (localBypass || demoBypass));
 }
 
 export function isEligibleUser<

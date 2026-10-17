@@ -710,6 +710,11 @@ function mockAlternatives(planId: string, key: string): ClassAlternatives {
 // ---------------------------------------------------------------------------
 
 export const mockApi: EnrolmentApi = {
+  async ruleChange() {
+    throw new Error(
+      "Rule-change confirmation requires the connected timetable backend.",
+    );
+  },
   async alternatives(planId, key) {
     return mockAlternatives(planId, key);
   },

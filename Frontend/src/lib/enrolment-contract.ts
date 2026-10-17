@@ -33,11 +33,21 @@ export interface Rule {
 }
 
 /** One AI message. */
+export interface RuleChangeProposal {
+  plan_id: string;
+  token: string;
+  remove: Rule[];
+  add: Rule[];
+  reasons: string[];
+  status?: "applied" | "declined" | "unavailable";
+}
+
 export interface Message {
   steps: string[]; // thought log lines, may be []
   text: string;
   note?: string;
   action?: "course_onboarding" | "new_timetable";
+  rule_change?: RuleChangeProposal;
 }
 
 export type Weekday = 1 | 2 | 3 | 4 | 5; // 1 = Monday

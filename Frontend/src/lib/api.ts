@@ -19,6 +19,7 @@ import type {
 import type { Confirmation, Context, ParseResponse, Plan, Rule } from "./types";
 
 export interface EnrolmentApi {
+  ruleChange(planId: string, token: string, accept: boolean): Promise<Plan>;
   alternatives(planId: string, sectionKey: string): Promise<ClassAlternatives>;
   keep(planId: string, sectionKey: string, keep: boolean): Promise<Plan>;
   swap(planId: string, fromKey: string, toKey: string): Promise<Plan>;

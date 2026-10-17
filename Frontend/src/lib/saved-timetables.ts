@@ -7,6 +7,32 @@ const message = z.object({
   steps: z.array(z.string()),
   note: z.string().optional(),
   action: z.enum(["course_onboarding", "new_timetable"]).optional(),
+  rule_change: z
+    .object({
+      plan_id: z.string(),
+      token: z.string(),
+      remove: z.array(
+        z.object({
+          id: z.string(),
+          kind: z.string(),
+          value: z.union([z.number(), z.string()]),
+          label: z.string(),
+          source: z.string(),
+        }),
+      ),
+      add: z.array(
+        z.object({
+          id: z.string(),
+          kind: z.string(),
+          value: z.union([z.number(), z.string()]),
+          label: z.string(),
+          source: z.string(),
+        }),
+      ),
+      reasons: z.array(z.string()),
+      status: z.enum(["applied", "declined", "unavailable"]).optional(),
+    })
+    .optional(),
 });
 const friend = z.object({
   name: z.string(),

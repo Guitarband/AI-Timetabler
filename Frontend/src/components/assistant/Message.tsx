@@ -1,5 +1,6 @@
 "use client";
 import { useReveal } from "@/hooks/useReveal";
+import type { RuleChangeProposal } from "@/lib/enrolment-contract";
 import type { Message as AssistantMessage } from "@/lib/types";
 import { ThoughtLog } from "./ThoughtLog";
 
@@ -10,12 +11,16 @@ export function AiMessage({
   error,
   onAction,
   actionDisabled,
+  onRuleChange,
+  currentPlanId,
 }: {
   message: AssistantMessage;
   animate: boolean;
   error?: boolean;
   onAction?: (action: NonNullable<AssistantMessage["action"]>) => void;
   actionDisabled?: boolean;
+  onRuleChange?: (proposal: RuleChangeProposal, accept: boolean) => void;
+  currentPlanId?: string;
 }) {
   const { shown, checked, textVisible } = useReveal(
     message.steps.length,
@@ -57,9 +62,85 @@ export function AiMessage({
                 </button>
               </div>
             )}
+            {message.rule_change && (
+              <RuleChangeReview
+                proposal={message.rule_change}
+                onDecide={onRuleChange}
+                disabled={actionDisabled}
+                currentPlanId={currentPlanId}
+              />
+            )}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function RuleChangeReview({
+  proposal,
+  onDecide,
+  disabled,
+  currentPlanId,
+}: {
+  proposal: RuleChangeProposal;
+  onDecide?: (proposal: RuleChangeProposal, accept: boolean) => void;
+  disabled?: boolean;
+  currentPlanId?: string;
+}) {
+  const stale = proposal.plan_id !== currentPlanId;
+  const resolved = proposal.status;
+  return (
+    <div className="mt-3 border-t border-divider pt-3 text-[13px] leading-normal">
+      {proposal.reasons.map((reason) => (
+        <p key={reason} className="mb-2">
+          {reason}
+        </p>
+      ))}
+      <p className="font-semibold">Remove</p>
+      <ul className="mb-2 list-disc pl-5">
+        {proposal.remove.map((rule) => (
+          <li key={rule.id}>{rule.label}</li>
+        ))}
+      </ul>
+      {proposal.add.length > 0 && (
+        <>
+          <p className="font-semibold">Add</p>
+          <ul className="mb-2 list-disc pl-5">
+            {proposal.add.map((rule) => (
+              <li key={rule.id}>{rule.label}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      {resolved || stale ? (
+        <output className="mt-2 block">
+          {resolved === "applied"
+            ? "Changes applied."
+            : resolved === "declined"
+              ? "Existing rules kept."
+              : resolved === "unavailable"
+                ? "Change could not be applied. Existing rules kept."
+                : "This proposal belongs to an earlier draft. Send your request again to review it."}
+        </output>
+      ) : (
+        <div className="course-chat-action flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={disabled || !onDecide}
+            onClick={() => onDecide?.(proposal, true)}
+          >
+            Apply changes
+          </button>
+          <button
+            type="button"
+            disabled={disabled || !onDecide}
+            onClick={() => onDecide?.(proposal, false)}
+          >
+            Keep existing rules
+          </button>
+        </div>
+      )}
     </div>
   );
 }

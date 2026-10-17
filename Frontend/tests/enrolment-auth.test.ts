@@ -73,6 +73,7 @@ test("every planner operation rejects missing, unverified and non-Monash session
           ],
         }),
       () => api.adjust({ plan_id: "one", text: "Change this" }),
+      () => api.ruleChange({ plan_id: "one", token: "proposal", accept: true }),
       () => api.alternatives({ plan_id: "one", section_key: "class" }),
       () => api.keep({ plan_id: "one", section_key: "class", keep: true }),
       () => api.swap({ plan_id: "one", from_key: "class", to_key: "other" }),
@@ -157,6 +158,20 @@ test("real planner requests use only the authenticated identity and keep tokens 
       { code: "BAD_REQUEST" },
     );
     assert.equal(requests.length, 5);
+    await caller().enrolment.ruleChange({
+      plan_id: "current",
+      token: "reviewed-proposal",
+      accept: true,
+    });
+    assert.deepEqual(JSON.parse(String(requests[5].options?.body)), {
+      plan_id: "current",
+      token: "reviewed-proposal",
+      accept: true,
+    });
+    assert.equal(
+      new Headers(requests[5].options?.headers).get("X-User-Id"),
+      user.id,
+    );
     globalThis.fetch = async () =>
       new Response("private backend error", { status: 500 });
     await assert.rejects(() => caller().enrolment.context(), {

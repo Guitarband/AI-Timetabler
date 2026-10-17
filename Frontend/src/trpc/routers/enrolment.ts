@@ -94,6 +94,17 @@ const history = z
   )
   .optional();
 export const enrolmentRouter = createTRPCRouter({
+  ruleChange: authenticatedProcedure
+    .input(
+      z.object({
+        plan_id: planId,
+        token: z.string().min(1).max(100_000),
+        accept: z.boolean(),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      request<Plan>("rule-change", ctx.user, input),
+    ),
   alternatives: authenticatedProcedure
     .input(z.object({ plan_id: planId, section_key: planId }))
     .mutation(({ ctx, input }) =>

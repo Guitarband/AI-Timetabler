@@ -446,6 +446,42 @@ function AccountPlanner({
         />
         <main className="planner-panels grid min-h-0 flex-1 gap-[20px] px-[22px] pb-[22px]">
           <AssistantPanel
+            currentPlanId={
+              phase === "confirmed" ? undefined : state.plan?.plan_id
+            }
+            onRuleChange={(proposal, accept) => {
+              void runFlow(async () => {
+                const current = stateRef.current;
+                if (
+                  current.phase !== "adjust" ||
+                  current.plan?.plan_id !== proposal.plan_id ||
+                  proposal.status
+                )
+                  return;
+                if (!(await checkCourses()) || !(await save(current))) return;
+                dispatch({ type: "SET_PHASE", phase: "adjusting" });
+                const next = await call(
+                  () =>
+                    api.ruleChange(proposal.plan_id, proposal.token, accept),
+                  { backTo: "adjust" },
+                );
+                if (!next) return;
+                dispatch({
+                  type: "RULE_CHANGE_RESOLVED",
+                  token: proposal.token,
+                  status: !accept
+                    ? "declined"
+                    : next.changed
+                      ? "applied"
+                      : "unavailable",
+                });
+                dispatch({ type: "PLAN_RECEIVED", plan: next });
+                await say(next.message, false, {
+                  type: "SET_PHASE",
+                  phase: "adjust",
+                });
+              });
+            }}
             phase={phase}
             items={state.items}
             rules={state.rules}

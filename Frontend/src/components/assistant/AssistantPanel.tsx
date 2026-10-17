@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { COPY } from "@/lib/copy";
+import type { RuleChangeProposal } from "@/lib/enrolment-contract";
 import type { ChatItem } from "@/lib/reducer";
 import type { Message, Phase, Rule } from "@/lib/types";
 import { Blueprint } from "../ui/Blueprint";
@@ -26,6 +27,8 @@ export function AssistantPanel(props: {
   onRulesChange: (r: Rule[]) => void;
   onBuild: () => void;
   onAction?: (action: NonNullable<Message["action"]>) => void;
+  onRuleChange?: (proposal: RuleChangeProposal, accept: boolean) => void;
+  currentPlanId?: string;
 }) {
   const { phase, items, waiting } = props;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -83,6 +86,8 @@ export function AssistantPanel(props: {
                   error={item.error}
                   onAction={props.onAction}
                   actionDisabled={waiting}
+                  onRuleChange={props.onRuleChange}
+                  currentPlanId={props.currentPlanId}
                 />
               );
             return (

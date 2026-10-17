@@ -55,6 +55,11 @@ export type Action =
   | { type: "RULES_PARSED"; rules: Rule[]; readyToBuild?: boolean }
   | { type: "RULES_EDITED"; rules: Rule[] }
   | { type: "PLAN_RECEIVED"; plan: Plan }
+  | {
+      type: "RULE_CHANGE_RESOLVED";
+      token: string;
+      status: "applied" | "declined" | "unavailable";
+    }
   | { type: "CONFIRMED"; confirmation: Confirmation }
   | { type: "SET_DRAFT"; text: string }
   | { type: "FOCUS_COMPOSER" };
@@ -151,6 +156,25 @@ export function reducer(state: State, action: Action): State {
             error: action.error,
           },
         ],
+      };
+
+    case "RULE_CHANGE_RESOLVED":
+      return {
+        ...state,
+        items: state.items.map((item) =>
+          item.role === "ai" && item.message.rule_change?.token === action.token
+            ? {
+                ...item,
+                message: {
+                  ...item.message,
+                  rule_change: {
+                    ...item.message.rule_change,
+                    status: action.status,
+                  },
+                },
+              }
+            : item,
+        ),
       };
 
     case "RULES_PARSED":
