@@ -21,6 +21,7 @@ from .models import (
     ConfirmRequest,
     KeepRequest,
     ParseRequest,
+    RuleChangeRequest,
     SolveRequest,
     SwapRequest,
 )
@@ -196,6 +197,15 @@ def create_app(config: dict | None = None, *, parser=None):
         return result(
             current_service().adjust(g.owner, data.plan_id, data.text, history=data.history)
         )
+
+    @app.post("/rule-change")
+    def rule_change():
+        data = body(RuleChangeRequest)
+        return result(current_service().rule_change(g.owner, data.plan_id, data.token, data.accept))
+
+    @app.post("/reopen")
+    def reopen():
+        return result(current_service().reopen(g.owner, body(ConfirmRequest).plan_id))
 
     @app.post("/confirm")
     def confirm():

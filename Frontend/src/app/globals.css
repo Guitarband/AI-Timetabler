@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+.confirm-dialog {
+  margin: auto;
+  width: min(440px, calc(100vw - 32px));
+  padding: 24px;
+  border: 1px solid var(--color-divider, #c8cdd1);
+  background: var(--color-bg, #fff);
+  color: var(--color-ink, #222);
+}
+.confirm-dialog::backdrop { background: rgb(0 0 0 / 35%); }
+
 /*
  * Design tokens (Frontend Brief, section 7). Names match the prototype exactly.
  * Declared in @theme so Tailwind also generates utilities (bg-accent-100, border-divider, ...).

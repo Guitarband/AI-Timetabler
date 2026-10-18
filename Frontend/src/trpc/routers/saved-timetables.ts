@@ -32,7 +32,10 @@ const summarySelect = {
   confirmed: true,
   revision: true,
   updatedAt: true,
+  snapshot: true,
 } as const;
+const isDeleted = (snapshot: unknown) =>
+  z.object({ deleted: z.literal(true) }).safeParse(snapshot).success;
 function serialize(row: SavedRow) {
   return {
     id: row.id,
@@ -70,9 +73,12 @@ export const savedTimetablesRouter = createTRPCRouter({
         select: summarySelect,
         orderBy: { updatedAt: "desc" },
       });
+      const visible = entries.filter((entry) => !isDeleted(entry.snapshot));
       return {
-        activeId: library?.activeId ?? null,
-        entries: entries.map((entry) => ({
+        activeId: visible.some((entry) => entry.id === library?.activeId)
+          ? (library?.activeId ?? null)
+          : null,
+        entries: visible.map(({ snapshot: _snapshot, ...entry }) => ({
           ...entry,
           updatedAt: entry.updatedAt.toISOString(),
         })),
@@ -88,7 +94,7 @@ export const savedTimetablesRouter = createTRPCRouter({
         await lockOwner(tx, ctx.user.id);
         const where = { userId_mode_id: { ...scope, id: input.id } };
         let row = await tx.savedTimetable.findUnique({ where });
-        if (!row)
+        if (!row || isDeleted(row.snapshot))
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "Saved timetable not found.",
@@ -171,6 +177,12 @@ export const savedTimetablesRouter = createTRPCRouter({
       return ctx.prisma.$transaction(async (tx) => {
         await lockOwner(tx, ctx.user.id);
         const current = await tx.savedTimetable.findUnique({ where });
+        if (current && isDeleted(current.snapshot))
+          throw new TRPCError({
+            code: "CONFLICT",
+            message:
+              "This timetable was deleted. Save a copy to keep your changes.",
+          });
         if (current?.mutationId === input.mutationId) return serialize(current);
         if ((current?.revision ?? 0) !== input.revision) throw conflict();
         const data = {
@@ -201,6 +213,86 @@ export const savedTimetablesRouter = createTRPCRouter({
       });
     }),
 
+  remove: accountProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        revision: z.number().int().positive(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const scope = { userId: ctx.user.id, mode: mode() };
+      return ctx.prisma.$transaction(async (tx) => {
+        await lockOwner(tx, ctx.user.id);
+        const where = { userId_mode_id: { ...scope, id: input.id } };
+        const row = await tx.savedTimetable.findUnique({ where });
+        if (!row)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Saved timetable not found.",
+          });
+        if (isDeleted(row.snapshot))
+          return { id: row.id, revision: row.revision };
+        if (row.revision !== input.revision) throw conflict();
+        const removed = await tx.savedTimetable.update({
+          where,
+          data: {
+            snapshot: {
+              ...snapshotSchema.parse(row.snapshot),
+              deleted: true,
+            } as unknown as Prisma.InputJsonValue,
+            revision: { increment: 1 },
+            mutationId: crypto.randomUUID(),
+          },
+        });
+        const library = await tx.timetableLibrary.findUnique({
+          where: { userId_mode: scope },
+        });
+        if (library?.activeId === input.id)
+          await tx.timetableLibrary.upsert({
+            where: { userId_mode: scope },
+            create: { ...scope, activeId: null },
+            update: { activeId: null },
+          });
+        return { id: removed.id, revision: removed.revision };
+      });
+    }),
+
+  restore: accountProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        revision: z.number().int().positive(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const scope = { userId: ctx.user.id, mode: mode() };
+      return ctx.prisma.$transaction(async (tx) => {
+        await lockOwner(tx, ctx.user.id);
+        const where = { userId_mode_id: { ...scope, id: input.id } };
+        const row = await tx.savedTimetable.findUnique({ where });
+        if (!row)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Saved timetable not found.",
+          });
+        if (!isDeleted(row.snapshot)) return serialize(row);
+        if (row.revision !== input.revision) throw conflict();
+        return serialize(
+          await tx.savedTimetable.update({
+            where,
+            data: {
+              snapshot: JSON.parse(
+                JSON.stringify(snapshotSchema.parse(row.snapshot)),
+              ) as Prisma.InputJsonValue,
+              revision: { increment: 1 },
+              mutationId: crypto.randomUUID(),
+            },
+          }),
+        );
+      });
+    }),
+
   importLegacy: accountProcedure
     .input(importTimetablesInput)
     .mutation(async ({ ctx, input }) => {
@@ -222,12 +314,15 @@ export const savedTimetablesRouter = createTRPCRouter({
             mutationId: crypto.randomUUID(),
           })),
         });
+        const importedActive = input.activeId
+          ? await tx.savedTimetable.findUnique({
+              where: { userId_mode_id: { ...scope, id: input.activeId } },
+            })
+          : null;
         const activeId =
           input.activeId &&
-          (await tx.savedTimetable.findUnique({
-            where: { userId_mode_id: { ...scope, id: input.activeId } },
-            select: { id: true },
-          }))
+          importedActive &&
+          !isDeleted(importedActive.snapshot)
             ? input.activeId
             : null;
         // Importing again never overwrites a newer database snapshot or selection.

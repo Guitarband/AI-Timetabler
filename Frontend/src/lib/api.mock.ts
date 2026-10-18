@@ -351,7 +351,47 @@ function detect(clause: string): Rule | null {
   return null;
 }
 
+function isEnrolmentQuestion(text: string): boolean {
+  return /^(?:(?:what|which) (?:classes|courses|units) (?:am i (?:enrolled in|registered for|taking)|do i (?:have|take))|(?:show|list)(?: me)? my (?:enrolled |registered |selected )?(?:classes|courses|units))[?.!]*$/i.test(
+    text.trim(),
+  );
+}
+
+function enrolmentAnswer(ids?: string[]): Message {
+  if (ids) {
+    const sections = ids
+      .map((id) => S[id])
+      .sort((a, b) => a.day - b.day || a.start.localeCompare(b.start));
+    return {
+      steps: [],
+      text: [
+        "Classes in your current sample draft:",
+        ...sections.map(
+          (s) =>
+            `• ${s.code} ${s.kind} ${s.section} — ${DAY_LONG[s.day - 1]} ${s.start}–${s.end} · ${s.room}`,
+        ),
+      ].join("\n"),
+      note: "This is an offline sample timetable, not a university enrolment record.",
+    };
+  }
+  const courses = mockCourses.filter(
+    (course) => !selectedCourses || selectedCourses.includes(course.code),
+  );
+  return {
+    steps: [],
+    text: courses.length
+      ? [
+          "Your selected sample courses:",
+          ...courses.map((course) => `• ${course.code} — ${course.title}`),
+        ].join("\n")
+      : "No courses are selected yet. Choose your courses to start planning.",
+    note: "Class times have not been allocated in this conversation. Course selection is not confirmation of enrolment.",
+  };
+}
+
 function parseText(text: string): ParseResponse {
+  if (isEnrolmentQuestion(text))
+    return { rules: [], message: enrolmentAnswer() };
   if (
     /^(?:fill in my timetable to allocate all my units with no clashes|build my timetable|allocate all my units|create a clash-free timetable)[.!?]?$/i.test(
       text.trim(),
@@ -710,6 +750,15 @@ function mockAlternatives(planId: string, key: string): ClassAlternatives {
 // ---------------------------------------------------------------------------
 
 export const mockApi: EnrolmentApi = {
+  async reopen(planId) {
+    const snap = editable(planId);
+    session.version += 1;
+    session.history = [structuredClone(snap)];
+    return buildPlan(snap.ids, snap.rules, null, {
+      steps: [],
+      text: "Created an editable copy. Your original confirmation is preserved; confirm again when your revisions are ready.",
+    });
+  },
   async ruleChange() {
     throw new Error(
       "Rule-change confirmation requires the connected timetable backend.",
@@ -815,6 +864,8 @@ export const mockApi: EnrolmentApi = {
     const t = text.toLowerCase();
     const unchanged = (msg: Message) =>
       buildPlan(snap.ids, snap.rules, null, msg, false);
+
+    if (isEnrolmentQuestion(text)) return unchanged(enrolmentAnswer(snap.ids));
 
     // 1) Undo
     if (/\bundo\b|put it back|revert|go back/.test(t)) {

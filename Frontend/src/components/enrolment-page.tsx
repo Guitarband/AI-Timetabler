@@ -9,6 +9,7 @@ import { SessionGuard } from "@/components/session-guard";
 import { ClassAlternatives } from "@/components/timetable/ClassAlternatives";
 import { SavedTimetables } from "@/components/timetable/SavedTimetables";
 import { TimetablePanel } from "@/components/timetable/TimetablePanel";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Tag } from "@/components/ui/Tag";
 import { DevPanel } from "@/dev/DevPanel"; // DEV-ONLY: delete when removing src/dev/
 import { useSavedTimetables } from "@/hooks/useSavedTimetables";
@@ -58,6 +59,10 @@ function AccountPlanner({
   const readyRef = useRef(false);
   const [switching, setSwitching] = useState(false);
   const [operationError, setOperationError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const flowRef = useRef(false);
   const [flowBusy, setFlowBusy] = useState(false);
   const runFlow = async (action: () => Promise<void>) => {
@@ -192,7 +197,12 @@ function AccountPlanner({
   // ---- intake / adjust: Send ----
   const checkCourses = useCallback(async () => {
     const catalogue = await call(() => coursesApi.catalogue(user.id), {
-      backTo: stateRef.current.plan ? "adjust" : "intake",
+      backTo:
+        stateRef.current.phase === "confirmed"
+          ? "confirmed"
+          : stateRef.current.plan
+            ? "adjust"
+            : "intake",
       text: "Could not check your course selection. Try again.",
     });
     if (!catalogue) return false;
@@ -391,6 +401,55 @@ function AccountPlanner({
     }
   };
 
+  const onDelete = async () => {
+    if (!deleteTarget || libraryBusy) return;
+    setSwitching(true);
+    setOperationError("");
+    try {
+      if (!(await save(stateRef.current)))
+        throw new Error(
+          "Save your current changes before deleting a timetable.",
+        );
+      const active = await saved.remove(deleteTarget.id);
+      if (active && stateRef.current.context) {
+        restorePlanner(null);
+        setSelectedClass(null);
+        dispatch({ type: "NEW_TIMETABLE", context: stateRef.current.context });
+      }
+      setDeleteTarget(null);
+    } catch (error) {
+      setOperationError(
+        error instanceof Error
+          ? error.message
+          : "Could not delete this timetable. Try again.",
+      );
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  const onReopen = async () => {
+    const current = stateRef.current;
+    if (current.phase !== "confirmed" || !current.plan || libraryBusy) return;
+    if (!(await checkCourses()) || !(await save(current))) return;
+    const planId = current.plan.plan_id;
+    const next = await call(() => api.reopen(planId), {
+      backTo: "confirmed",
+    });
+    if (!next) return;
+    const revisionName = `${saved.name.slice(0, 69)} (revision)`;
+    try {
+      await saved.startNew();
+      saved.setName(revisionName);
+      dispatch({ type: "REOPENED", plan: next });
+      await say(next.message);
+    } catch {
+      setOperationError(
+        "Could not save the editable copy. Your original confirmation is preserved.",
+      );
+    }
+  };
+
   return (
     <SessionGuard userId={user.id}>
       <div className="planner-shell flex h-screen flex-col overflow-hidden">
@@ -440,6 +499,28 @@ function AccountPlanner({
           onSelect={saved.setSelectedId}
           onNew={onNew}
           onOpen={onOpen}
+          onDelete={() => {
+            const entry = saved.library.entries.find(
+              (item) => item.id === saved.selectedId,
+            );
+            if (!libraryBusy && entry) {
+              setOperationError("");
+              setDeleteTarget({ id: entry.id, name: entry.name });
+            }
+          }}
+          canUndoDelete={!!saved.lastDeleted}
+          onUndoDelete={() => {
+            void runFlow(async () => {
+              try {
+                await saved.undoDelete();
+                setOperationError("");
+              } catch {
+                setOperationError(
+                  "Could not restore that timetable. Try again.",
+                );
+              }
+            });
+          }}
           onSave={() => {
             if (!libraryBusy && context) void save(stateRef.current);
           }}
@@ -524,6 +605,7 @@ function AccountPlanner({
             }}
           />
           <TimetablePanel
+            onReopen={() => void runFlow(onReopen)}
             phase={phase}
             plan={state.plan}
             prevMatch={state.prevMatch}
@@ -567,6 +649,17 @@ function AccountPlanner({
           />
         )}
         <DevPanel /> {/* DEV-ONLY: delete when removing src/dev/ */}
+        {deleteTarget && (
+          <ConfirmDialog
+            title="Delete timetable?"
+            description={`Delete “${deleteTarget.name}” and its saved chat from your library? This will not cancel confirmed bookings. You can undo this deletion on this page.`}
+            confirmLabel="Delete timetable"
+            busy={switching}
+            error={operationError}
+            onCancel={() => setDeleteTarget(null)}
+            onConfirm={() => void onDelete()}
+          />
+        )}
       </div>
     </SessionGuard>
   );

@@ -78,6 +78,7 @@ test("every planner operation rejects missing, unverified and non-Monash session
       () => api.keep({ plan_id: "one", section_key: "class", keep: true }),
       () => api.swap({ plan_id: "one", from_key: "class", to_key: "other" }),
       () => api.confirm({ plan_id: "one" }),
+      () => api.reopen({ plan_id: "one" }),
     ])
       await assert.rejects(action, { code: "UNAUTHORIZED" });
   }

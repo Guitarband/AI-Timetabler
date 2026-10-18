@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useAuth } from "@/trpc/hooks/auth";
 
 export function SignOutButton({
@@ -15,6 +16,7 @@ export function SignOutButton({
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [confirming, setConfirming] = useState(false);
 
   async function handleSignOut() {
     setPending(true);
@@ -41,12 +43,26 @@ export function SignOutButton({
       <button
         type="button"
         disabled={pending || disabled}
-        onClick={handleSignOut}
+        onClick={() => {
+          setError("");
+          setConfirming(true);
+        }}
         className="secondary-button"
       >
         {pending ? "Signing out…" : "Sign out"}
       </button>
-      {error && (
+      {confirming && (
+        <ConfirmDialog
+          title="Sign out?"
+          description="Are you sure you want to sign out? Any pending timetable changes will be saved first."
+          confirmLabel="Sign out"
+          busy={pending}
+          error={error}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => void handleSignOut()}
+        />
+      )}
+      {error && !confirming && (
         <p className="account-error" role="alert">
           {error}
         </p>

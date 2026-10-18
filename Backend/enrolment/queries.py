@@ -6,6 +6,13 @@ from .solver import DAYS, describe_section, shared_keys
 
 
 def answer_query(query: TimetableQuery, plan: Plan | None, catalogue, profile) -> Message:
+    def matches(section):
+        return (
+            (query.day is None or section.day == query.day)
+            and (query.course is None or section.code == query.course)
+            and (query.section_key is None or section.key == query.section_key)
+        )
+
     def answer(title, lines=()):
         # Long answers use the existing factual list so text stays within the API limit.
         text = "\n".join([title, *(f"• {line}" for line in lines)])
@@ -16,7 +23,26 @@ def answer_query(query: TimetableQuery, plan: Plan | None, catalogue, profile) -
 
     if query.topic == "help":
         return answer(
-            "I can answer questions about your timetable, shared classes, class times and rooms, preferences, or published alternatives. For example: ‘Which classes match with Maya?’ or ‘What classes do I have on Wednesday?’ Ask me to move a class when you want a change. I can't drop required courses or look up information outside this planner."
+            "I can answer questions about your timetable, shared classes, class times and rooms, preferences, or published alternatives. Ask me to move a class when you want a change, or name a rule to remove it. If a rule-change proposal is waiting, choose Apply changes or Keep existing rules on that proposal. I can't drop required courses or look up information outside this planner."
+        )
+    if query.topic == "enrolment":
+        if plan:
+            return answer(
+                "Classes in your current draft (not confirmation of enrolment):",
+                [
+                    f"{describe_section(s)} · {s.room}"
+                    for s in sorted(plan.sections, key=lambda s: (s.day, s.start, s.code))
+                    if matches(s)
+                ],
+            )
+        titles = {s.code: s.title for s in catalogue.available(profile)}
+        return answer(
+            "Your selected courses (class times have not been allocated in this conversation):",
+            [
+                f"{code} — {titles.get(code, code)}"
+                for code in profile.approved_courses
+                if query.course is None or query.course == code
+            ],
         )
     if plan is None:
         return answer(

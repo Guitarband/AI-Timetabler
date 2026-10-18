@@ -257,6 +257,7 @@ function memoryDatabase() {
               confirmed,
               revision,
               updatedAt,
+              snapshot,
             }) => ({
               id,
               name,
@@ -265,6 +266,7 @@ function memoryDatabase() {
               confirmed,
               revision,
               updatedAt,
+              snapshot,
             }),
           ),
       create: async ({
@@ -355,6 +357,18 @@ test("all persistence operations require the eligible account shown in the page"
     for (const action of [
       () => api.list({ accountId: user.id }),
       () => api.open({ accountId: user.id, id: crypto.randomUUID() }),
+      () =>
+        api.remove({
+          accountId: user.id,
+          id: crypto.randomUUID(),
+          revision: 1,
+        }),
+      () =>
+        api.restore({
+          accountId: user.id,
+          id: crypto.randomUUID(),
+          revision: 1,
+        }),
       () => api.save({ accountId: user.id, ...input() }),
       () =>
         api.importLegacy({ accountId: user.id, activeId: null, entries: [] }),
@@ -616,4 +630,85 @@ test("reopening recovers an adjustment and booking committed before the browser 
   } finally {
     process.env.NEXT_PUBLIC_USE_MOCK = "true";
   }
+});
+
+test("deletion hides saved chats, rejects stale writes and legacy resurrection, and supports undo", async () => {
+  const db = memoryDatabase();
+  const api = caller(db);
+  const value = { accountId: user.id, ...input() };
+  const first = await api.save(value);
+  const other = { ...user, id: "another-owner" };
+  await assert.rejects(
+    () =>
+      caller(db, other).remove({
+        accountId: other.id,
+        id: value.id,
+        revision: 1,
+      }),
+    { code: "NOT_FOUND" },
+  );
+  await assert.rejects(
+    () => api.remove({ accountId: user.id, id: value.id, revision: 2 }),
+    { code: "CONFLICT" },
+  );
+  const removed = await api.remove({
+    accountId: user.id,
+    id: value.id,
+    revision: first.revision,
+  });
+  assert.deepEqual(await api.list({ accountId: user.id }), {
+    activeId: null,
+    entries: [],
+  });
+  await assert.rejects(() => api.open({ accountId: user.id, id: value.id }), {
+    code: "NOT_FOUND",
+  });
+  await assert.rejects(
+    () => api.save({ ...value, revision: 1, mutationId: crypto.randomUUID() }),
+    { code: "CONFLICT" },
+  );
+  await assert.rejects(() => api.save(value), { code: "CONFLICT" });
+  await api.importLegacy({
+    accountId: user.id,
+    activeId: value.id,
+    entries: [value],
+  });
+  assert.equal((await api.list({ accountId: user.id })).entries.length, 0);
+  assert.deepEqual(
+    await api.remove({ accountId: user.id, id: value.id, revision: 1 }),
+    removed,
+  );
+  const restored = await api.restore({ accountId: user.id, ...removed });
+  assert.deepEqual(restored.snapshot, first.snapshot);
+  assert.equal((await api.list({ accountId: user.id })).entries.length, 1);
+  await assert.rejects(
+    () => api.remove({ accountId: user.id, id: value.id, revision: 1 }),
+    { code: "CONFLICT" },
+  );
+});
+
+test("reopening a confirmed snapshot unlocks a draft and preserves conversation and kept classes", async () => {
+  const snapshot = plannedSnapshot();
+  snapshot.confirmation = {
+    reference: "confirmed",
+    confirmed_at: new Date().toISOString(),
+    courses: 1,
+    sections: 1,
+    credits: 6,
+    swap_deadline: "2026-12-01",
+    message: { steps: [], text: "Confirmed" },
+  };
+  snapshot.phase = "confirmed";
+  const state = reducer(initialState, { type: "OPEN_TIMETABLE", snapshot });
+  assert.ok(state.plan);
+  const copy = { ...state.plan, plan_id: "editable-copy", version: 1 };
+  const revised = reducer(state, { type: "REOPENED", plan: copy });
+  assert.equal(revised.phase, "adjust");
+  assert.equal(revised.confirmation, null);
+  assert.deepEqual(revised.items, state.items);
+  assert.equal(state.confirmation?.reference, "confirmed");
+  assert.equal(
+    snapshotSchema.parse(snapshotOf(revised)).plan?.plan_id,
+    "editable-copy",
+  );
 });

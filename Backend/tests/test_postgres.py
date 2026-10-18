@@ -334,3 +334,21 @@ def test_admin_can_add_course_options_assign_courses_and_track_capacity(
     assert "comp-l02" in {s.key for s in plan.sections} and "comp-l01" not in {
         s.key for s in plan.sections
     }
+
+
+def test_reopened_confirmed_copy_preserves_bookings_until_reconfirmation(database, owner):
+    original = service(database, owner).build(owner, [])
+    confirmation = service(database, owner).confirm(owner, original.plan_id)
+    before = database.enrolled_sections(owner)
+    copied = service(database, owner).reopen(owner, original.plan_id)
+    assert copied.plan_id != original.plan_id
+    assert copied.rules == original.rules and copied.kept_sections == original.kept_sections
+    assert database.enrolled_sections(owner) == before
+    workshop = next(s for s in copied.sections if s.code == "WRIT 1000")
+    target = "writ-w03" if workshop.key == "writ-w01" else "writ-w01"
+    revised = service(database, owner).swap(owner, copied.plan_id, workshop.key, target)
+    assert revised.changed
+    assert database.enrolled_sections(owner) == before
+    service(database, owner).confirm(owner, revised.plan_id)
+    assert database.enrolled_sections(owner) == before - {workshop.key} | {target}
+    assert service(database, owner).confirm(owner, original.plan_id) == confirmation

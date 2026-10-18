@@ -55,6 +55,7 @@ export type Action =
   | { type: "RULES_PARSED"; rules: Rule[]; readyToBuild?: boolean }
   | { type: "RULES_EDITED"; rules: Rule[] }
   | { type: "PLAN_RECEIVED"; plan: Plan }
+  | { type: "REOPENED"; plan: Plan }
   | {
       type: "RULE_CHANGE_RESOLVED";
       token: string;
@@ -211,6 +212,17 @@ export function reducer(state: State, action: Action): State {
         prevMatch: state.plan ? state.plan.match_pct : null,
       };
     }
+
+    case "REOPENED":
+      return {
+        ...state,
+        phase: "adjust",
+        plan: action.plan,
+        rules: action.plan.rules,
+        confirmation: null,
+        prevMatch: null,
+        draft: "",
+      };
 
     case "CONFIRMED":
       return { ...state, confirmation: action.confirmation };

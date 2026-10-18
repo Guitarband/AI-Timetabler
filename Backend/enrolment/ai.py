@@ -73,6 +73,7 @@ Keep topic, friends, day, course, section_key and source INSIDE query, not at th
 Query topics: student_identity (who a student is, or their name/student ID),
 friend_matches (which classes match a friend, counts, which friends share a class),
 schedule (class times, rooms, first/last class), preferences (rules, match score and why),
+enrolment (which classes/courses/units the student is enrolled in, registered for, or taking),
 alternatives (what other sections are available WITHOUT asking to move), summary (overview or days off),
 help (how to use this planner, or questions outside timetable data).
 Use friends: [] for all currently selected friends, or named friends resolved from shared_friends.
@@ -88,6 +89,9 @@ guess an ID or include every selected friend. With no identifying reference, use
 Identity questions work before a timetable is built and do not ask for class matches.
 "Do I share anything with Maya on Wednesday?" adds day:3 to that query.
 "What are my Wednesday classes?" is query/schedule with day:3.
+"What classes am I enrolled in", "Which units am I taking?", and "What courses am I
+registered for?" are query/enrolment, including before building a draft. They never add rules.
+The server distinguishes confirmed prototype bookings from selected courses and drafts.
 "What options exist for my seminar?" is query/alternatives; "move my seminar" is a change.
 Queries MUST have rules:[], move:null, remove_rules:[], changes:[]; only query actions have query.
 Do not write an answer: the server answers using the actual plan and permitted catalogue data.
@@ -136,9 +140,18 @@ Only alternatives has nonempty changes; omit changes or use [] for other actions
 When the request gives a daily work deadline, include the latest_day rule as well as any move.
 If it applies every day, use latest instead. Do not re-add preferences the user says to KEEP;
 the server already preserves them. If the user explicitly replaces, relaxes or removes a rule,
-list it in remove_rules as {"rule_id":"ID from current_plan.rules","source":"exact words requesting the replacement/removal"}.
+list it in remove_rules as {"rule_id":"ID from current_plan.rules","source":"exact words requesting the replacement/removal","mode":"explicit"}.
 Add its replacement to rules if one was requested. Never remove unrelated rules or remove rules
 merely to improve the score. Accepting a one-off tradeoff does not itself remove an old preference.
+Use mode explicit ONLY when the latest user message directly asks to remove, replace or relax
+that rule (e.g. "remove my Friday-off rule" or "change my earliest start from 10 to 9").
+A new conflicting preference alone is NOT authorization to remove an old rule. If removing an
+old rule would resolve a strong contradiction, use mode proposed so the server asks for approval.
+"Start after 9" with an existing start-after-10 rule adds earliest 540 and proposes removing
+the old rule; "replace my start-after-10 rule with start-after-9" explicitly replaces it.
+Never infer deletion of a day-off rule just because another day off was added: both may be wanted.
+A bare "yes" in response to a rule-change proposal is not explicit removal; return query/help
+so the user can use the proposal's Apply changes button. Do not replay a proposal from history.
 "Put me in Maya's seminar" may select the shared seminar key if it is present in shared_friends.
 Do not return model reasoning, summaries, scores, SQL, code, or extra fields. The server generates
 labels and factual explanations. For unsupported or undo, rules and remove_rules must be [] and move must be null.
@@ -283,6 +296,14 @@ class FixtureParser:
     """Explicit, offline demo of the brief's exact sentences. Never a fallback for AI failures."""
 
     def parse(self, text: str, *, context: dict, plan: Plan | None = None) -> Intent:
+        if text.casefold().strip().rstrip(".!?") in {
+            "what classes am i enrolled in",
+            "what courses am i enrolled in",
+            "what units am i enrolled in",
+            "which units am i taking",
+            "what courses am i registered for",
+        }:
+            return Intent(action="query", query=TimetableQuery(topic="enrolment", source=text))
         if text.casefold().strip().rstrip(".!?") in {
             "fill in my timetable to allocate all my units with no clashes",
             "build my timetable",

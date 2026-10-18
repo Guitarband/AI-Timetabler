@@ -20,6 +20,10 @@ export function useSavedTimetables(userId: string) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [warning, setWarning] = useState("");
+  const [lastDeleted, setLastDeleted] = useState<{
+    id: string;
+    revision: number;
+  } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentState = useRef<State | null>(null);
   const mounted = useRef(true);
@@ -184,6 +188,51 @@ export function useSavedTimetables(userId: string) {
     [writer, adopt, cancelTimer, userId],
   );
 
+  const remove = useCallback(
+    async (id: string) => {
+      cancelTimer();
+      await writer.flush();
+      const active = id === writer.activeId;
+      const revision = active
+        ? writer.savedRevision
+        : library.entries.find((entry) => entry.id === id)?.revision;
+      if (!revision)
+        throw new Error("Reload the library before deleting this timetable.");
+      const removed = await savedTimetablesApi.remove.mutate({
+        accountId: userId,
+        id,
+        revision,
+      });
+      if (active) adopt(null);
+      setLastDeleted(removed);
+      setSelectedId((selected) => (selected === id ? "" : selected));
+      setLibrary((previous) => ({
+        ...previous,
+        activeId: previous.activeId === id ? null : previous.activeId,
+        entries: previous.entries.filter((entry) => entry.id !== id),
+      }));
+      return active;
+    },
+    [writer, cancelTimer, adopt, library.entries, userId],
+  );
+
+  const undoDelete = useCallback(async () => {
+    if (!lastDeleted) return;
+    const entry = await savedTimetablesApi.restore.mutate({
+      accountId: userId,
+      ...lastDeleted,
+    });
+    setLibrary((previous) => ({
+      ...previous,
+      entries: [
+        ...previous.entries.filter((item) => item.id !== entry.id),
+        entry,
+      ],
+    }));
+    setSelectedId(entry.id);
+    setLastDeleted(null);
+  }, [lastDeleted, userId]);
+
   const startNew = useCallback(async () => {
     cancelTimer();
     await writer.flush();
@@ -266,5 +315,8 @@ export function useSavedTimetables(userId: string) {
     open,
     startNew,
     saveCopy,
+    remove,
+    undoDelete,
+    lastDeleted,
   };
 }

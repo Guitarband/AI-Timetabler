@@ -86,6 +86,22 @@ class Store:
             )
             db.commit()
 
+    def fork_confirmed(self, owner, plan_id, make_draft):
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = self.row(db, owner, plan_id)
+            if not row["confirmation"] or row["head"] != plan_id:
+                raise ApiError(409, "Only the confirmed version can be reopened for editing.")
+            plan = make_draft(Plan.model_validate_json(row["body"]))
+            family = uuid4().hex
+            db.execute("INSERT INTO families VALUES (?, ?, ?, NULL)", (family, owner, plan.plan_id))
+            db.execute(
+                "INSERT INTO plans VALUES (?, ?, NULL, ?)",
+                (plan.plan_id, family, plan.model_dump_json(exclude_none=True)),
+            )
+            db.commit()
+            return plan
+
     def confirm(self, owner: str, plan_id: str, make_confirmation):
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")

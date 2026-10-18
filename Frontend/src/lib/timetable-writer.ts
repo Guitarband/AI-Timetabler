@@ -59,6 +59,9 @@ export class TimetableWriter {
   get activeId() {
     return this.id;
   }
+  get savedRevision() {
+    return this.revision;
+  }
 
   flush(): Promise<void> {
     if (this.running) return this.running;

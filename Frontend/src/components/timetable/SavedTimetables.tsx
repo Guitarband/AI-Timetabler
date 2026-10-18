@@ -18,6 +18,9 @@ export function SavedTimetables(props: {
   onSave: () => void;
   onNew: () => void;
   onOpen: () => void;
+  onDelete: () => void;
+  onUndoDelete: () => void;
+  canUndoDelete: boolean;
 }) {
   return (
     <section className="saved-timetables" aria-label="Saved timetables">
@@ -77,6 +80,17 @@ export function SavedTimetables(props: {
         {props.conflict && (
           <Button disabled={props.disabled} onClick={props.onSaveCopy}>
             Save a copy
+          </Button>
+        )}
+        <Button
+          disabled={props.disabled || !props.selectedId}
+          onClick={props.onDelete}
+        >
+          Delete
+        </Button>
+        {props.canUndoDelete && (
+          <Button disabled={props.disabled} onClick={props.onUndoDelete}>
+            Undo deletion
           </Button>
         )}
       </div>

@@ -374,7 +374,9 @@ def test_replacing_one_rule_preserves_unrelated_rules_and_undo(app, client, head
                 {
                     "action": "rules",
                     "rules": [{"kind": "earliest", "value": 540, "source": text}],
-                    "remove_rules": [{"rule_id": old_rule["id"], "source": text}],
+                    "remove_rules": [
+                        {"rule_id": old_rule["id"], "source": text, "mode": "explicit"}
+                    ],
                 }
             )
 

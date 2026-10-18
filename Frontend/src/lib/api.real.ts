@@ -13,6 +13,7 @@ const client = createTRPCClient<AppRouter>({
   ],
 });
 export const realApi: EnrolmentApi = {
+  reopen: (plan_id) => client.enrolment.reopen.mutate({ plan_id }),
   ruleChange: (plan_id, token, accept) =>
     client.enrolment.ruleChange.mutate({ plan_id, token, accept }),
   alternatives: (plan_id, section_key) =>

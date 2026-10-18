@@ -36,6 +36,7 @@ export function TimetablePanel({
   busy,
   onAsk,
   onConfirm,
+  onReopen,
   onSectionSelect,
 }: {
   phase: Phase;
@@ -47,6 +48,7 @@ export function TimetablePanel({
   busy: boolean;
   onAsk: () => void;
   onConfirm: () => void;
+  onReopen?: () => void;
   onSectionSelect?: (section: Section) => void;
 }) {
   const term = context?.term ?? "";
@@ -169,7 +171,21 @@ export function TimetablePanel({
           />
         )}
         {confirmed && confirmation && (
-          <ConfirmedCard confirmation={confirmation} />
+          <>
+            <ConfirmedCard confirmation={confirmation} />
+            <button
+              type="button"
+              className="secondary-button mt-3"
+              disabled={busy || !onReopen}
+              onClick={onReopen}
+            >
+              Edit confirmed timetable
+            </button>
+            <p className="mt-2 text-sm">
+              Creates an editable copy. Existing bookings stay in place until
+              you confirm the revision.
+            </p>
+          </>
         )}
       </div>
     </Blueprint>

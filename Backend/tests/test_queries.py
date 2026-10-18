@@ -18,7 +18,7 @@ def ask(app, draft, topic, **filters):
     for field in ["sections", "rules", "scores", "match_pct", "friends"]:
         assert result.model_dump()[field] == draft[field]
     stored, _ = service.store.get("student-a", result.plan_id, editable=True)
-    assert stored.model_dump() == draft
+    assert stored.model_dump(exclude_none=True) == draft
     return result.message.text + "\n" + "\n".join(result.message.steps)
 
 

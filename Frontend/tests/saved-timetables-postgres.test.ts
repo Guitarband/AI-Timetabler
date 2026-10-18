@@ -232,9 +232,41 @@ test(
               (await caller().open({ accountId: id, id: value.id })).revision,
               3,
             );
+            const removed = await caller().remove({
+              accountId: id,
+              id: value.id,
+              revision: 3,
+            });
+            const deletedLibrary = await caller().list({ accountId: id });
+            assert.equal(deletedLibrary.activeId, null);
+            assert.ok(
+              !deletedLibrary.entries.some((entry) => entry.id === value.id),
+            );
+            await assert.rejects(
+              () =>
+                caller().save({
+                  ...value,
+                  revision: 3,
+                  mutationId: crypto.randomUUID(),
+                }),
+              { code: "CONFLICT" },
+            );
+            const restored = await caller().restore({
+              accountId: id,
+              ...removed,
+            });
+            assert.deepEqual(restored.snapshot, recovered.snapshot);
+            assert.deepEqual(
+              (
+                await tx.planFamily.findUniqueOrThrow({
+                  where: { id: familyId },
+                })
+              ).confirmation,
+              confirmation,
+            );
             throw rollback;
           },
-          { timeout: 45000 },
+          { timeout: 90000, maxWait: 20000 },
         ),
         (error: unknown) => error === rollback,
       );

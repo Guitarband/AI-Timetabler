@@ -1,6 +1,8 @@
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+from itsdangerous import BadSignature, URLSafeTimedSerializer
+
 from .ai import Parser, rule_identity
 from .alternatives import failure_message, inspect_option
 from .catalogue import Catalogue
@@ -10,13 +12,16 @@ from .models import (
     ClassAlternatives,
     Confirmation,
     Context,
+    Intent,
     Message,
     ParseResponse,
     Plan,
     Rule,
+    RuleChangeProposal,
     SolveRequest,
 )
 from .queries import answer_query
+from .rule_changes import conflicts
 from .solver import DAYS, describe_section, label, relative_match, solve
 from .storage import Store
 
@@ -107,6 +112,27 @@ class Service:
         return intent, rules
 
     def answer(self, owner, query, plan=None):
+        if query.topic == "enrolment" and self.directory:
+            keys = self.directory.enrolled_sections(owner)
+            sections = [
+                s
+                for s in self.catalogue.sections
+                if s.key in keys
+                and (query.day is None or s.day == query.day)
+                and (query.course is None or s.code == query.course)
+                and (query.section_key is None or s.key == query.section_key)
+            ]
+            if keys:
+                return Message(
+                    text="Your confirmed classes in this prototype:"
+                    if sections
+                    else "No confirmed classes match that question in this prototype.",
+                    steps=[
+                        f"{describe_section(s)} · {s.room}"
+                        for s in sorted(sections, key=lambda s: (s.day, s.start, s.code))
+                    ],
+                    note="These are prototype bookings, not a university enrolment record.",
+                )
         if query.topic == "student_identity":
             if not self.directory:
                 return Message(text="Student lookup is unavailable in the sample-file mode.")
@@ -342,6 +368,47 @@ class Service:
             intent, added = self.interpret(owner, text, current, history=history)
         except SelfMatchError as error:
             return self.unchanged(current, error.detail)
+        return self.adjust_intent(owner, current, parent_id, intent, added)
+
+    def proposal_signer(self):
+        return URLSafeTimedSerializer(
+            self.settings["TIMETABLE_BACKEND_TOKEN"], salt="rule-change-v1"
+        )
+
+    def rule_change(self, owner, plan_id, token, accept):
+        try:
+            proposal = self.proposal_signer().loads(token, max_age=3600)
+        except BadSignature as error:
+            raise ApiError(
+                409, "This rule proposal expired or is invalid. Send your request again."
+            ) from error
+        if proposal["owner"] != owner or proposal["plan_id"] != plan_id:
+            raise ApiError(404, "This rule proposal does not belong to this timetable.")
+        current, parent_id = self.store.get(owner, plan_id, editable=True)
+        if not accept:
+            return self.unchanged(
+                current, "Kept your existing rules. The proposed change was not applied."
+            )
+        if self.directory:
+            for rule in current.rules:
+                if rule.kind == "friend":
+                    name = self.resolve_friend(owner, str(rule.value))
+                    self.catalogue.students[owner].friends[str(rule.value)] = (
+                        self.catalogue.students[owner].friends[name]
+                    )
+        added = self.resolve_rules(owner, [Rule.model_validate(r) for r in proposal["added"]])
+        return self.adjust_intent(
+            owner,
+            current,
+            parent_id,
+            Intent.model_validate(proposal["intent"]),
+            added,
+            approved=set(proposal["remove_ids"]),
+        )
+
+    def adjust_intent(self, owner, current, parent_id, intent, added, approved=None):
+        original_intent = intent.model_dump(mode="json")
+        original_added = [r.model_dump(mode="json") for r in added]
         profile = self.catalogue.profile(owner)
         if intent.class_change:
             change, question = resolve_change(intent.class_change, current)
@@ -393,6 +460,47 @@ class Service:
                     502,
                     "The AI proposed removing an unknown preference. Try rephrasing your request.",
                 )
+            explicit = {r.rule_id for r in intent.remove_rules if r.mode == "explicit"}
+            detected = conflicts(
+                [r for r in current.rules if r.id not in explicit],
+                added,
+                {s.key: s for s in self.catalogue.available(profile)},
+                profile,
+            )
+            proposed = (remove_ids - explicit) | set(detected)
+            if proposed - (approved or set()):
+                removal_ids = explicit | proposed
+                token = self.proposal_signer().dumps(
+                    {
+                        "owner": owner,
+                        "plan_id": current.plan_id,
+                        "intent": original_intent,
+                        "added": original_added,
+                        "remove_ids": sorted(removal_ids),
+                    }
+                )
+                reasons = [reason for values in detected.values() for reason in values]
+                if proposed - set(detected):
+                    reasons.append(
+                        "Your request may replace an existing preference. Review the exact changes below."
+                    )
+                return current.model_copy(
+                    update={
+                        "changed": False,
+                        "message": Message(
+                            text="This request would change existing rules. Apply the changes below or keep your existing rules?",
+                            note="Your draft is unchanged. Approval applies this request only; kept classes stay protected.",
+                            rule_change=RuleChangeProposal(
+                                plan_id=current.plan_id,
+                                token=token,
+                                remove=[r for r in current.rules if r.id in removal_ids],
+                                add=added,
+                                reasons=reasons,
+                            ),
+                        ),
+                    }
+                )
+            remove_ids = explicit | proposed | (approved or set())
             removed = [r for r in rules if r.id in remove_ids]
             rules = [r for r in rules if r.id not in remove_ids]
             if intent.move:
@@ -482,6 +590,23 @@ class Service:
         plan.message.note = note or None
         self.store.save(owner, plan, current.plan_id)
         return plan
+
+    def reopen(self, owner, plan_id):
+        def make_draft(current):
+            return current.model_copy(
+                deep=True,
+                update={
+                    "plan_id": f"plan-{uuid4().hex}",
+                    "version": 1,
+                    "changed": True,
+                    "sections": [s.model_copy(update={"changed": False}) for s in current.sections],
+                    "message": Message(
+                        text="Created an editable copy of your confirmed timetable. Your existing bookings stay in place until you confirm this revised draft."
+                    ),
+                },
+            )
+
+        return self.store.fork_confirmed(owner, plan_id, make_draft)
 
     def confirm(self, owner: str, plan_id: str):
         def create(plan):

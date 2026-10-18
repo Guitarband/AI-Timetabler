@@ -59,10 +59,19 @@ class Rule(Model):
         return self
 
 
+class RuleChangeProposal(Model):
+    plan_id: str
+    token: str
+    remove: list[Rule]
+    add: list[Rule]
+    reasons: list[str]
+
+
 class Message(Model):
     steps: list[str] = Field(default_factory=list)
     text: NonEmpty
     note: str | None = None
+    rule_change: RuleChangeProposal | None = None
 
 
 class Section(Model):
@@ -209,6 +218,11 @@ class AdjustRequest(ParseRequest, ConfirmRequest):
     pass
 
 
+class RuleChangeRequest(ConfirmRequest):
+    token: Annotated[str, Field(min_length=1, max_length=100000)]
+    accept: bool
+
+
 class AlternativesRequest(ConfirmRequest):
     section_key: NonEmpty
 
@@ -258,6 +272,7 @@ class Move(Model):
 class RuleRemoval(Model):
     rule_id: Annotated[str, Field(min_length=1, max_length=200)]
     source: Annotated[str, Field(min_length=1, max_length=10000)]
+    mode: Literal["explicit", "proposed"] = "proposed"
 
 
 class SectionChange(Model):
@@ -298,6 +313,7 @@ class TimetableQuery(Model):
         "student_identity",
         "friend_matches",
         "schedule",
+        "enrolment",
         "preferences",
         "alternatives",
         "summary",

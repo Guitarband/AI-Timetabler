@@ -110,6 +110,14 @@ class Database:
             students={owner: Profile(approved_courses=list(required))},
         )
 
+    def enrolled_sections(self, owner):
+        with self.connection() as db:
+            rows = db.execute(
+                'SELECT e."optionId" FROM class_enrolment e JOIN course_class cc ON cc.id=e."classId" WHERE e."userId"=%s AND cc."termId"=%s ORDER BY e."optionId"',
+                (owner, self.term_id),
+            ).fetchall()
+        return {row["optionId"] for row in rows}
+
     @staticmethod
     def find_student(db, reference):
         """Resolve a unique account without requiring a saved timetable."""
@@ -251,6 +259,25 @@ class PostgresStore:
                 (plan.plan_id, family, previous_id, Jsonb(plan.model_dump(exclude_none=True))),
             )
             self.publish(db, owner, plan)
+
+    def fork_confirmed(self, owner, plan_id, make_draft):
+        with self.database.connection() as db:
+            self.lock_owner(db, owner)
+            row = self.row(db, owner, plan_id, lock=True)
+            if not row["confirmation"] or row["head"] != plan_id:
+                raise ApiError(409, "Only the confirmed version can be reopened for editing.")
+            plan = make_draft(Plan.model_validate(row["body"]))
+            family = uuid4().hex
+            db.execute(
+                'INSERT INTO plan_family (id,"ownerId","termId",head) VALUES (%s,%s,%s,%s)',
+                (family, owner, self.database.term_id, plan.plan_id),
+            )
+            db.execute(
+                'INSERT INTO planner_plan (id,"familyId","parentId",body) VALUES (%s,%s,NULL,%s)',
+                (plan.plan_id, family, Jsonb(plan.model_dump(exclude_none=True))),
+            )
+            # Reopening is a copy, not a booking or publication. Existing seats stay held.
+            return plan
 
     def confirm(self, owner, plan_id, make_confirmation):
         with self.database.connection() as db:
