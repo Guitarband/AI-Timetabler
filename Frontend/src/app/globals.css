@@ -1144,3 +1144,74 @@ button:disabled {
     font-size: 19px;
   }
 }
+
+/* Friends page: reuses the account card, widened for the friend list. */
+.friends-shell {
+  width: min(640px, 100%);
+}
+.friends-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.friends-section {
+  margin-top: 28px;
+}
+.friends-section h2 {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+}
+.friends-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-divider);
+}
+.friends-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-divider);
+}
+.friends-who {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+}
+.friends-who small {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+}
+.friends-actions {
+  display: flex;
+  gap: 8px;
+}
+.friends-small {
+  min-height: 34px;
+  padding: 4px 12px;
+  font-size: 13px;
+}
+.friends-empty {
+  padding: 14px 0;
+  font-size: 14px;
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+}
+@media (max-width: 560px) {
+  .friends-add {
+    grid-template-columns: 1fr;
+  }
+  .friends-row {
+    flex-wrap: wrap;
+  }
+  .friends-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

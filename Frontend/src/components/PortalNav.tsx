@@ -15,7 +15,7 @@ export function PortalNav({
 }: {
   term?: string;
   studentName?: string;
-  active?: "timetable" | "account" | "auth" | "courses";
+  active?: "timetable" | "account" | "auth" | "courses" | "friends";
   beforeLeave?: () => Promise<boolean>;
   busy?: boolean;
 }) {
@@ -57,6 +57,13 @@ export function PortalNav({
               aria-current={active === "courses" ? "page" : undefined}
             >
               Courses
+            </Link>
+            <Link
+              href="/friends"
+              onClick={navigate("/friends")}
+              aria-current={active === "friends" ? "page" : undefined}
+            >
+              Friends
             </Link>
             <Link
               href="/account"
