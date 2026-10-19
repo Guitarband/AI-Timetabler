@@ -203,12 +203,11 @@ export const savedTimetablesRouter = createTRPCRouter({
           : await tx.savedTimetable.create({
               data: { ...scope, id: input.id, ...data },
             });
-        if (!current)
-          await tx.timetableLibrary.upsert({
-            where: { userId_mode: scope },
-            create: { ...scope, activeId: row.id },
-            update: { activeId: row.id },
-          });
+        await tx.timetableLibrary.upsert({
+          where: { userId_mode: scope },
+          create: { ...scope, activeId: row.id },
+          update: { activeId: row.id },
+        });
         return serialize(row);
       });
     }),
