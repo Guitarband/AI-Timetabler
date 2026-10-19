@@ -166,17 +166,74 @@ class Database:
                     r"\[([0-9]{6,12})\]$", value
                 )
                 raise SelfMatchError("student ID" if by_id else "student name")
-            timetable = db.execute(
-                'SELECT id FROM student_timetable WHERE "userId"=%s AND "termId"=%s',
+            # The account library is the user's selected saved timetable. Prefer its
+            # owned planner record, while still supporting imported snapshots whose
+            # planner record predates PostgreSQL persistence.
+            saved = db.execute(
+                """SELECT COALESCE(p.body->'sections', s.snapshot #> '{plan,sections}') AS sections
+                   FROM timetable_library l
+                   JOIN saved_timetable s
+                     ON s."userId"=l."userId" AND s.mode=l.mode AND s.id=l."activeId"
+                   LEFT JOIN planner_plan p ON p.id=(s.snapshot #>> '{plan,plan_id}')
+                   LEFT JOIN plan_family f ON f.id=p."familyId"
+                   WHERE l."userId"=%s AND l.mode='real'
+                     AND s.snapshot->>'deleted' IS DISTINCT FROM 'true'
+                     AND (p.id IS NULL OR
+                       (f."ownerId"=s."userId" AND f."termId"=%s))
+                     AND jsonb_typeof(
+                       COALESCE(p.body->'sections', s.snapshot #> '{plan,sections}')
+                     )='array'""",
                 (student["id"], self.term_id),
             ).fetchone()
-            if not timetable:
-                raise ApiError(422, f"{student['name']} has no saved timetable for this term yet.")
-            keys = db.execute(
-                'SELECT "optionId" FROM timetable_entry WHERE "timetableId"=%s ORDER BY "optionId"',
-                (timetable["id"],),
-            ).fetchall()
-        return f"{student['name']} [{student['studentId']}]", [r["optionId"] for r in keys]
+            keys = self.saved_section_keys(
+                db, student["id"], saved["sections"] if saved else None
+            )
+            if keys is None:
+                timetable = db.execute(
+                    'SELECT id FROM student_timetable WHERE "userId"=%s AND "termId"=%s',
+                    (student["id"], self.term_id),
+                ).fetchone()
+                if not timetable:
+                    raise ApiError(
+                        422,
+                        f"{student['name']} has no saved timetable for this term yet.",
+                    )
+                entries = db.execute(
+                    'SELECT "optionId" FROM timetable_entry WHERE "timetableId"=%s ORDER BY "optionId"',
+                    (timetable["id"],),
+                ).fetchall()
+                keys = [entry["optionId"] for entry in entries]
+        return f"{student['name']} [{student['studentId']}]", keys
+
+    def saved_section_keys(self, db, owner, sections):
+        """Return complete active-term sections from a saved account snapshot."""
+        if not isinstance(sections, list) or not sections:
+            return None
+        keys = [
+            section.get("key")
+            for section in sections
+            if isinstance(section, dict) and isinstance(section.get("key"), str)
+        ]
+        if len(keys) != len(sections) or len(set(keys)) != len(keys):
+            return None
+        selected = db.execute(
+            """SELECT o.id,cc.id AS class_id
+               FROM class_option o JOIN course_class cc ON cc.id=o."classId"
+               WHERE o.id=ANY(%s) AND cc."termId"=%s""",
+            (keys, self.term_id),
+        ).fetchall()
+        required = db.execute(
+            """SELECT cc.id
+               FROM course_class cc JOIN course_approval a
+                 ON a."courseCode"=cc."courseCode" AND a."termId"=cc."termId"
+               WHERE a."userId"=%s AND a."termId"=%s""",
+            (owner, self.term_id),
+        ).fetchall()
+        if len(selected) != len(keys) or {row["class_id"] for row in selected} != {
+            row["id"] for row in required
+        }:
+            return None
+        return sorted(keys)
 
 
 class PostgresStore:
