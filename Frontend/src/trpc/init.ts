@@ -51,6 +51,6 @@ export const authenticatedProcedure = baseProcedure.use(({ ctx, next }) => {
       message: "Sign in with an eligible Monash account to continue.",
     });
   }
-  // Preserve ctx.auth; derive identities exclusively from the verified session.
+  // Preserve ctx.auth; derive identities exclusively from the authenticated session.
   return next({ ctx: { ...ctx, auth: session, user, userId: user.id } });
 });

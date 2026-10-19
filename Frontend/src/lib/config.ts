@@ -10,8 +10,11 @@ const speedRaw = (
 ).toLowerCase();
 
 export const config = {
-  /** true = mock implementation, no backend needed. Defaults to true so demo day never depends on the backend. */
-  useMock: (process.env.NEXT_PUBLIC_USE_MOCK ?? "true") !== "false",
+  /** Hosted builds use the shared backend by default; mock mode must be explicit in production. */
+  useMock:
+    process.env.NEXT_PUBLIC_USE_MOCK === "true" ||
+    (process.env.NEXT_PUBLIC_USE_MOCK !== "false" &&
+      process.env.NODE_ENV !== "production"),
   assistantSpeed: (["cinematic", "normal", "instant"].includes(speedRaw)
     ? speedRaw
     : "normal") as AssistantSpeed,

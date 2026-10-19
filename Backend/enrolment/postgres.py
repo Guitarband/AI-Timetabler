@@ -193,16 +193,34 @@ class Database:
                     'SELECT id FROM student_timetable WHERE "userId"=%s AND "termId"=%s',
                     (student["id"], self.term_id),
                 ).fetchone()
-                if not timetable:
-                    raise ApiError(
-                        422,
-                        f"{student['name']} has no saved timetable for this term yet.",
+                if timetable:
+                    entries = db.execute(
+                        'SELECT "optionId" FROM timetable_entry WHERE "timetableId"=%s ORDER BY "optionId"',
+                        (timetable["id"],),
+                    ).fetchall()
+                    keys = self.saved_section_keys(
+                        db,
+                        student["id"],
+                        [{"key": entry["optionId"]} for entry in entries],
                     )
-                entries = db.execute(
-                    'SELECT "optionId" FROM timetable_entry WHERE "timetableId"=%s ORDER BY "optionId"',
-                    (timetable["id"],),
+            if keys is None:
+                bookings = db.execute(
+                    """SELECT e."optionId" AS option_id
+                       FROM class_enrolment e JOIN course_class cc ON cc.id=e."classId"
+                       WHERE e."userId"=%s AND cc."termId"=%s
+                       ORDER BY option_id""",
+                    (student["id"], self.term_id),
                 ).fetchall()
-                keys = [entry["optionId"] for entry in entries]
+                keys = self.saved_section_keys(
+                    db,
+                    student["id"],
+                    [{"key": booking["option_id"]} for booking in bookings],
+                )
+            if keys is None:
+                raise ApiError(
+                    422,
+                    f"{student['name']} has no saved timetable for this term yet.",
+                )
         return f"{student['name']} [{student['studentId']}]", keys
 
     def saved_section_keys(self, db, owner, sections):

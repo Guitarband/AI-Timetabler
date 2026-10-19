@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { config } from "./config";
 import type { State } from "./reducer";
 import type { Confirmation, Context, Plan } from "./types";
 
@@ -254,7 +255,7 @@ export function emptyLibrary(): TimetableLibrary {
 
 // Read-only compatibility importer. All new writes go through the authenticated API.
 export function readLegacyTimetables(userId: string) {
-  const mode = process.env.NEXT_PUBLIC_USE_MOCK === "true" ? "mock" : "real";
+  const mode = config.useMock ? "mock" : "real";
   const raw = window.localStorage.getItem(
     `enrolment:saved-timetables:v1:${mode}:${userId}`,
   );

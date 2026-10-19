@@ -1,0 +1,2 @@
+ALTER TABLE "course"
+ADD COLUMN "isCatalogueActive" BOOLEAN NOT NULL DEFAULT TRUE;

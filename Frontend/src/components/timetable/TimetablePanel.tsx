@@ -93,7 +93,7 @@ export function TimetablePanel({
       aria-label="Timetable"
       className="planner-timetable min-h-0 min-w-0 bg-bg"
     >
-      <div className="scroll-thin h-full overflow-y-auto px-[16px] pb-[18px] pt-[15px]">
+      <div className="timetable-print-content scroll-thin h-full overflow-y-auto px-[16px] pb-[18px] pt-[15px]">
         <div className="flex flex-wrap items-start justify-between gap-[16px]">
           <div className="min-w-[190px] flex-1">
             <div className="flex flex-wrap items-center gap-[8px]">
@@ -115,6 +115,15 @@ export function TimetablePanel({
               </p>
             )}
           </div>
+          {plan && (
+            <button
+              type="button"
+              className="secondary-button print-timetable"
+              onClick={() => window.print()}
+            >
+              Print timetable
+            </button>
+          )}
           {plan && config.showMatchBadge && (
             <MatchBadge value={plan.match_pct} previous={prevMatch} />
           )}
@@ -133,7 +142,7 @@ export function TimetablePanel({
         ))}
 
         {plan && !confirmed && onSectionSelect && (
-          <p className="mt-3 text-sm ink-62">
+          <p className="timetable-edit-hint mt-3 text-sm ink-62">
             Select a class to compare times, swap or keep it in place.
           </p>
         )}

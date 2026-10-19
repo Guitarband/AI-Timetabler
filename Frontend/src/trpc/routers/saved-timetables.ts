@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { config } from "@/lib/config";
 import {
   importTimetablesInput,
   saveTimetableInput,
@@ -11,8 +12,7 @@ import type {
 } from "../../../generated/prisma/client";
 import { authenticatedProcedure, createTRPCRouter } from "../init";
 
-const mode = () =>
-  (process.env.NEXT_PUBLIC_USE_MOCK ?? "true") !== "false" ? "mock" : "real";
+const mode = () => (config.useMock ? "mock" : "real");
 // Reject queued requests from a page belonging to a previous signed-in account.
 const accountProcedure = authenticatedProcedure
   .input(z.object({ accountId: z.string().min(1) }))

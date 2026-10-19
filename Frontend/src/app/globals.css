@@ -333,6 +333,33 @@
 .portal-links a:hover {
   color: var(--color-accent-700);
 }
+.public-page { min-height: 100vh; display: flex; flex-direction: column; }
+.public-main { width: min(960px, calc(100% - 48px)); margin: 0 auto; padding: 34px 0 44px; flex: 1; }
+.public-panel { padding: 18px; background: var(--color-bg); }
+.public-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 2px 2px 14px; border-bottom: 1px solid var(--color-divider); }
+.public-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.public-heading h1 { margin: 0; font: 600 25px/1.15 var(--font-display); }
+.public-heading > p { max-width: 620px; margin: 5px 0 0; color: color-mix(in srgb, var(--color-text) 65%, transparent); font-size: 13px; }
+.public-content { max-width: 760px; }
+.public-content section { padding: 18px 2px; border-bottom: 1px solid var(--color-divider); }
+.public-content h2 { margin: 0; font: 600 17px/1.3 var(--font-display); }
+.public-content p { max-width: 68ch; margin: 0; font-size: 13px; }
+.public-row { display: grid; grid-template-columns: minmax(150px, 0.7fr) minmax(0, 1.8fr); gap: 20px; }
+.public-actions { padding: 18px 2px 2px; }
+.public-mail-link { display: inline-flex; margin-top: 5px; text-decoration: none; }
+.public-note { margin-top: 9px !important; color: color-mix(in srgb, var(--color-text) 60%, transparent); font-size: 11px !important; }
+.public-footer { display: flex; justify-content: space-between; gap: 16px; padding: 12px 22px; border-top: 1px solid var(--color-divider); color: color-mix(in srgb, var(--color-text) 65%, transparent); font-size: 12px; }
+.public-footer a { color: var(--color-accent-800); }
+.help-search { display: grid; gap: 6px; max-width: 440px; margin: 18px 0 12px; font-size: 12px; font-weight: 600; }
+.help-search input { min-height: 38px; padding: 7px 10px; border: 1px solid var(--color-divider); background: var(--color-neutral-100); color: var(--color-text); font: inherit; font-size: 13px; }
+.help-result-count { padding: 0 0 8px; color: color-mix(in srgb, var(--color-text) 58%, transparent); font-size: 11px !important; }
+.help-questions details { border-top: 1px solid var(--color-divider); }
+.help-questions details:last-child { border-bottom: 1px solid var(--color-divider); }
+.help-questions summary { display: flex; justify-content: space-between; gap: 12px; padding: 12px 8px; cursor: pointer; font-size: 13px; font-weight: 600; list-style-position: inside; }
+.help-questions summary::marker { color: var(--color-accent-700); }
+.help-questions details[open] summary { background: var(--color-accent-100); color: var(--color-accent-900); }
+.help-questions details p { max-width: none; padding: 10px 12px 14px; color: color-mix(in srgb, var(--color-text) 75%, transparent); }
+.help-empty { padding: 14px 0; color: color-mix(in srgb, var(--color-text) 65%, transparent); }
 .portal-term {
   color: color-mix(in srgb, var(--color-text) 65%, transparent);
   font-size: 11px;
@@ -584,6 +611,11 @@ button:disabled {
   font-size: 12px;
 }
 @media (max-width: 600px) {
+  .public-main { width: calc(100% - 28px); padding: 24px 0 32px; }
+  .public-panel { padding: 14px; }
+  .public-row { grid-template-columns: 1fr; gap: 6px; }
+  .public-heading { flex-direction: column; }
+  .public-footer { flex-wrap: wrap; padding-inline: 14px; }
   .saved-timetables {
     margin-right: 12px;
     margin-left: 12px;
@@ -591,6 +623,18 @@ button:disabled {
   .saved-timetables-picker {
     flex-basis: calc(100% - 80px);
   }
+}
+
+@media print {
+  @page { size: landscape; margin: 12mm; }
+  body, html { height: auto !important; background: #fff !important; }
+  body * { visibility: hidden !important; }
+  .planner-timetable, .planner-timetable * { visibility: visible !important; }
+  .planner-timetable { position: absolute !important; inset: 0 auto auto 0 !important; width: 100% !important; height: auto !important; min-height: 0 !important; overflow: visible !important; border: 0 !important; background: #fff !important; }
+  .timetable-print-content { height: auto !important; overflow: visible !important; padding: 0 !important; }
+  .print-timetable, .print-exclude, .timetable-edit-hint, .timetable-audit, .planner-timetable .secondary-button { display: none !important; }
+  .planner-timetable section[aria-label="Scroll the weekly timetable horizontally"] { overflow: visible !important; }
+  .planner-timetable section[aria-label="Weekly timetable"] { min-width: 0 !important; width: 100% !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
 .timetable-audit {
   grid-template-columns: 1.15fr 1fr;
@@ -1142,76 +1186,5 @@ button:disabled {
   }
   .course-dialog-header h2 {
     font-size: 19px;
-  }
-}
-
-/* Friends page: reuses the account card, widened for the friend list. */
-.friends-shell {
-  width: min(640px, 100%);
-}
-.friends-add {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.friends-section {
-  margin-top: 28px;
-}
-.friends-section h2 {
-  margin: 0 0 10px;
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 600;
-}
-.friends-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--color-divider);
-}
-.friends-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--color-divider);
-}
-.friends-who {
-  display: grid;
-  flex: 1;
-  min-width: 0;
-  font-size: 14px;
-}
-.friends-who small {
-  overflow-wrap: anywhere;
-  font-size: 12px;
-  color: color-mix(in srgb, var(--color-text) 70%, transparent);
-}
-.friends-actions {
-  display: flex;
-  gap: 8px;
-}
-.friends-small {
-  min-height: 34px;
-  padding: 4px 12px;
-  font-size: 13px;
-}
-.friends-empty {
-  padding: 14px 0;
-  font-size: 14px;
-  color: color-mix(in srgb, var(--color-text) 70%, transparent);
-}
-@media (max-width: 560px) {
-  .friends-add {
-    grid-template-columns: 1fr;
-  }
-  .friends-row {
-    flex-wrap: wrap;
-  }
-  .friends-actions {
-    width: 100%;
-    justify-content: flex-end;
   }
 }

@@ -349,7 +349,6 @@ function caller(prisma: unknown, identity: unknown = user) {
 test("all persistence operations require the eligible account shown in the page", async () => {
   for (const identity of [
     null,
-    { ...user, emailVerified: false },
     { ...user, email: "a@example.org" },
     { ...user, id: "another-account" },
   ]) {

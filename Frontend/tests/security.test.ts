@@ -79,10 +79,9 @@ test("email delivery must have an HTTPS endpoint and token", () => {
   }
 });
 
-test("unverified or non-Monash sessions cannot call protected procedures", async () => {
+test("missing or non-Monash sessions cannot call protected procedures", async () => {
   const invalidUsers = [
     null,
-    { ...verifiedUser, emailVerified: false },
     { ...verifiedUser, email: "person@example.com" },
   ];
 

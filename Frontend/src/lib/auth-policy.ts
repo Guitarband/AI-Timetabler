@@ -1,17 +1,9 @@
 import { isMonashEmail } from "@/lib/monash-email";
 
-// The production bypass is limited to the sample-data MVP demo and requires two
-// explicit server configuration flags. Real planner deployments always verify.
+// Email verification never blocks registration, sign-in, or general app access.
+// Monash address domains and student ID format are still validated separately.
 export function requiresEmailVerification() {
-  const verificationDisabled =
-    process.env.AUTH_REQUIRE_EMAIL_VERIFICATION === "false";
-  const localBypass = process.env.NODE_ENV === "development";
-  const demoBypass =
-    process.env.NODE_ENV === "production" &&
-    process.env.AUTH_ALLOW_UNVERIFIED_DEMO === "true" &&
-    process.env.NEXT_PUBLIC_USE_MOCK === "true";
-
-  return !(verificationDisabled && (localBypass || demoBypass));
+  return false;
 }
 
 export function isEligibleUser<

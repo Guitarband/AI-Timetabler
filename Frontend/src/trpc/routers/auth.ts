@@ -74,7 +74,7 @@ export const authRouter = createTRPCRouter({
         ctx,
         "sign-in/email",
         input,
-        "Sign in failed. Check your details and email verification.",
+        "Sign in failed. Check your email and password.",
       );
       return { signedIn: true };
     }),

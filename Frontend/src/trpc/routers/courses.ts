@@ -1,14 +1,14 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { mockCourses } from "@/lib/api.mock";
+import { config } from "@/lib/config";
 import { type Course, type CourseCatalogue, sameCourses } from "@/lib/courses";
 import type { Prisma } from "../../../generated/prisma/client";
 import { authenticatedProcedure, createTRPCRouter } from "../init";
 
 const scopeFor = (userId: string) => ({
   userId,
-  mode:
-    (process.env.NEXT_PUBLIC_USE_MOCK ?? "true") !== "false" ? "mock" : "real",
+  mode: config.useMock ? "mock" : "real",
   termId: process.env.TERM_ID || "2026-fall",
 });
 const accountProcedure = authenticatedProcedure

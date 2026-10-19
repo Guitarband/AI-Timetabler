@@ -1,6 +1,6 @@
 import type { Context } from "./types";
 
-/** Identity comes from the verified session, even when the planner uses fixtures. */
+/** Identity comes from the authenticated session, even when the planner uses fixtures. */
 export function personalizeContext(context: Context, name: string): Context {
   const firstName = name.trim().split(/\s+/)[0] || "there";
   return {

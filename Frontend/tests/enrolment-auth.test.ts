@@ -50,10 +50,9 @@ test("session names replace fixture identities without leaking between accounts"
   assert.equal(second.term, context.term);
 });
 
-test("every planner operation rejects missing, unverified and non-Monash sessions", async () => {
+test("every planner operation rejects missing and non-Monash sessions", async () => {
   for (const identity of [
     null,
-    { ...user, emailVerified: false },
     { ...user, email: "person@example.com" },
   ]) {
     const api = caller(identity).enrolment;

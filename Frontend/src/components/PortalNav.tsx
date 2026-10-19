@@ -15,7 +15,14 @@ export function PortalNav({
 }: {
   term?: string;
   studentName?: string;
-  active?: "timetable" | "account" | "auth" | "courses" | "friends";
+  active?:
+    | "timetable"
+    | "account"
+    | "auth"
+    | "courses"
+    | "about"
+    | "help"
+    | "contact";
   beforeLeave?: () => Promise<boolean>;
   busy?: boolean;
 }) {
@@ -33,15 +40,43 @@ export function PortalNav({
     .map((word) => word[0]?.toUpperCase())
     .slice(0, 2)
     .join("");
+  const brandHref =
+    studentName === undefined && active !== "auth" ? "/about" : "/";
   return (
     <header className="portal-header">
-      <Link href="/" className="portal-brand" onClick={navigate("/")}>
+      <Link
+        href={brandHref}
+        className="portal-brand"
+        onClick={navigate(brandHref)}
+      >
         <span className="font-display text-[17px] font-semibold">
           {COPY.portal.university}
         </span>
         <span className="eyebrow ink-50 text-[10px]">{COPY.portal.portal}</span>
       </Link>
       <nav className="portal-links" aria-label="Portal">
+        {studentName === undefined && (
+          <>
+            <Link
+              href="/about"
+              aria-current={active === "about" ? "page" : undefined}
+            >
+              About
+            </Link>
+            <Link
+              href="/help"
+              aria-current={active === "help" ? "page" : undefined}
+            >
+              Help
+            </Link>
+            <Link
+              href="/contact"
+              aria-current={active === "contact" ? "page" : undefined}
+            >
+              Contact
+            </Link>
+          </>
+        )}
         {studentName !== undefined ? (
           <>
             <Link
@@ -59,13 +94,6 @@ export function PortalNav({
               Courses
             </Link>
             <Link
-              href="/friends"
-              onClick={navigate("/friends")}
-              aria-current={active === "friends" ? "page" : undefined}
-            >
-              Friends
-            </Link>
-            <Link
               href="/account"
               onClick={navigate("/account")}
               aria-current={active === "account" ? "page" : undefined}
@@ -81,8 +109,10 @@ export function PortalNav({
             )}
             <SignOutButton beforeSignOut={beforeLeave} disabled={busy} />
           </>
+        ) : active === "auth" ? (
+          <span className="portal-term">Student sign in</span>
         ) : (
-          <span className="ink-62 text-[13px]">Enrolment Assistant</span>
+          <Link href="/login">Sign in</Link>
         )}
       </nav>
     </header>

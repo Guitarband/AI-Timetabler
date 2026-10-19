@@ -12,17 +12,18 @@ process.env.DATABASE_URL =
 process.env.BETTER_AUTH_SECRET = "a-test-secret-that-is-at-least-32-characters";
 process.env.BETTER_AUTH_URL = "http://localhost:3000";
 
-test("verification bypass requires both development and an explicit opt-in", () => {
+test("email verification never gates account access in any mode", () => {
   const user = { email: "test@student.monash.edu", emailVerified: false };
   for (const mode of ["production", "test", "development"]) {
     for (const flag of ["true", "false", ""]) {
       Object.assign(process.env, {
         NODE_ENV: mode,
         AUTH_REQUIRE_EMAIL_VERIFICATION: flag,
+        AUTH_ALLOW_UNVERIFIED_DEMO: flag,
+        NEXT_PUBLIC_USE_MOCK: flag,
       });
-      const bypass = mode === "development" && flag === "false";
-      assert.equal(requiresEmailVerification(), !bypass);
-      assert.equal(isEligibleUser(user), bypass);
+      assert.equal(requiresEmailVerification(), false);
+      assert.equal(isEligibleUser(user), true);
       assert.equal(isEligibleUser({ ...user, emailVerified: true }), true);
       assert.equal(
         isEligibleUser({ ...user, email: "test@example.com" }),

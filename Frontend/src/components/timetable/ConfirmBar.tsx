@@ -16,7 +16,7 @@ export function ConfirmBar({
   onConfirm: () => void;
 }) {
   return (
-    <Blueprint className="mt-[18px] flex flex-wrap animate-rise-in items-center justify-between gap-[14px] bg-bg px-[14px] py-[11px]">
+    <Blueprint className="print-exclude mt-[18px] flex flex-wrap animate-rise-in items-center justify-between gap-[14px] bg-bg px-[14px] py-[11px]">
       <p className="text-[12px] ink-62">
         {COPY.confirmBar.summary(
           summary.sections,

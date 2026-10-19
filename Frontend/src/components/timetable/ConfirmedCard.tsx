@@ -18,7 +18,7 @@ export function ConfirmedCard({
     [COPY.confirmed.credits, confirmation.credits],
   ];
   return (
-    <Blueprint className="mt-[18px] animate-rise-in bg-accent-100 px-[16px] py-[14px]">
+    <Blueprint className="print-exclude mt-[18px] animate-rise-in bg-accent-100 px-[16px] py-[14px]">
       <div className="flex items-center gap-[10px]">
         <CircleCheckIcon size={26} className="shrink-0 text-accent-700" />
         <div>
