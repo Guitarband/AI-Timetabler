@@ -18,6 +18,7 @@ export function PortalNav({
   active?:
     | "timetable"
     | "account"
+    | "friends"
     | "auth"
     | "courses"
     | "about"

@@ -44,7 +44,10 @@ export async function readCourseCatalogue(
       });
     term = currentTerm.name;
     const rows = await db.course.findMany({
-      where: { classes: { some: { termId: scope.termId } } },
+      where: {
+        isCatalogueActive: true,
+        classes: { some: { termId: scope.termId } },
+      },
       include: {
         classes: {
           where: { termId: scope.termId },

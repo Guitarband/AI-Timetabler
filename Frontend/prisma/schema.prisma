@@ -79,13 +79,14 @@ model AcademicTerm {
 }
 
 model Course {
-  code      String           @id
-  title     String
-  credits   Int
-  faculty   String           @default("Other faculties")
-  description String         @default("")
-  classes   CourseClass[]
-  approvals CourseApproval[]
+  code              String           @id
+  title             String
+  credits           Int
+  faculty           String           @default("Other faculties")
+  description       String           @default("")
+  isCatalogueActive Boolean          @default(true)
+  classes           CourseClass[]
+  approvals         CourseApproval[]
 
   @@map("course")
 }
