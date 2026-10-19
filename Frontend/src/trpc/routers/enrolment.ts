@@ -22,17 +22,26 @@ async function request<T>(
   let url: URL;
   try {
     url = new URL(`${address.replace(/\/$/, "")}/${operation}`);
-    const local =
-      process.env.NODE_ENV === "development" &&
-      ["localhost", "127.0.0.1"].includes(url.hostname);
-    if (url.protocol !== "https:" && !(local && url.protocol === "http:"))
-      throw new Error("HTTPS required");
   } catch {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
       message: "The enrolment backend URL is invalid.",
     });
   }
+  const localHttp =
+    process.env.NODE_ENV === "development" &&
+    ["localhost", "127.0.0.1"].includes(url.hostname);
+  const explicitlyAllowedHttp =
+    process.env.ENROLMENT_BACKEND_ALLOW_HTTP === "true";
+  if (
+    url.protocol !== "https:" &&
+    !(url.protocol === "http:" && (localHttp || explicitlyAllowedHttp))
+  )
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "The enrolment backend must use HTTPS unless ENROLMENT_BACKEND_ALLOW_HTTP=true.",
+    });
   try {
     const response = await fetch(url, {
       method: body === undefined ? "GET" : "POST",
