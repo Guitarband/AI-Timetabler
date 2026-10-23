@@ -21,6 +21,7 @@ import { COPY } from "@/lib/copy";
 import { courseOnboardingMessage, sameCourses } from "@/lib/courses";
 import { coursesApi } from "@/lib/courses-api";
 import { fmtDate } from "@/lib/format";
+import { bestPartialAllocation } from "@/lib/partial-allocation";
 import { type Action, initialState, isBusy, reducer } from "@/lib/reducer";
 import { personalizeContext } from "@/lib/session-profile";
 import type { Message, Phase, Plan, Section } from "@/lib/types";
@@ -96,19 +97,30 @@ function AccountPlanner({
   const call = useCallback(
     async <T,>(
       fn: () => Promise<T>,
-      onError: { backTo: Phase; restoreDraft?: string; text?: string },
+      onError: {
+        backTo: Phase;
+        restoreDraft?: string;
+        text?: string;
+        onFailure?: (error: unknown) => Promise<string | undefined>;
+      },
     ): Promise<T | null> => {
       setWaiting(true);
       try {
         return await fn();
       } catch (err) {
         setWaiting(false);
+        let failureText = onError.text ?? COPY.errorText;
+        try {
+          failureText = (await onError.onFailure?.(err)) ?? failureText;
+        } catch {
+          // A preview failure must not hide the original solver error.
+        }
         // API error or timeout: show it as an AI message with a note, go back one phase,
         // and put the user's text back in the box so they can resend (brief section 9).
         await say(
           {
             steps: [],
-            text: onError.text ?? COPY.errorText,
+            text: failureText,
             note: (err as Error)?.message || undefined,
           },
           true,
@@ -240,24 +252,33 @@ function AccountPlanner({
         return;
       }
 
-      if (phase === "intake") {
+      if (phase === "intake" || phase === "confirm") {
         dispatch({ type: "SET_PHASE", phase: "thinking" });
         if (!(await save(stateRef.current))) {
-          dispatch({ type: "SET_PHASE", phase: "intake" });
+          dispatch({ type: "SET_PHASE", phase });
           dispatch({ type: "SET_DRAFT", text });
           return;
         }
         const res = await call(() => api.parse(text, history), {
-          backTo: "intake",
+          backTo: phase,
           restoreDraft: text,
         });
         if (!res) return;
+        if (phase === "confirm" && !res.rules.length && !res.ready_to_build) {
+          await say(res.message, false, { type: "SET_PHASE", phase });
+          dispatch({ type: "SET_DRAFT", text });
+          return;
+        }
+        const rules =
+          phase === "confirm" && res.ready_to_build && !res.rules.length
+            ? stateRef.current.rules
+            : res.rules;
         await say(res.message, false, {
           type: "RULES_PARSED",
-          rules: res.rules,
+          rules,
           readyToBuild: res.ready_to_build,
         });
-        if (res.rules.length === 0 && !res.ready_to_build) {
+        if (rules.length === 0 && !res.ready_to_build) {
           dispatch({ type: "SET_DRAFT", text });
         }
         return;
@@ -293,19 +314,39 @@ function AccountPlanner({
     const { phase, rules } = stateRef.current;
     if (phase !== "confirm" || waiting) return;
     if (!(await checkCourses())) return;
+    dispatch({ type: "PARTIAL_PREVIEW", preview: null });
     dispatch({ type: "SET_PHASE", phase: "generating" });
     if (!(await save(stateRef.current))) {
       dispatch({ type: "SET_PHASE", phase: "confirm" });
       return;
     }
-    const plan = await call(() => api.solve(rules), { backTo: "confirm" });
+    const plan = await call(() => api.solve(rules), {
+      backTo: "confirm",
+      text: COPY.buildErrorText,
+      onFailure: async (error) => {
+        if (
+          !(error instanceof Error) ||
+          !error.message.includes("No available, clash-free combination")
+        )
+          return;
+        const catalogue = await coursesApi.catalogue(user.id);
+        if (catalogue.demo) return;
+        const preview = bestPartialAllocation(catalogue);
+        if (!preview) return;
+        dispatch({ type: "PARTIAL_PREVIEW", preview });
+        return COPY.buildPartialText(
+          preview.sections.length,
+          preview.totalClasses,
+        );
+      },
+    });
     if (!plan) return;
     dispatch({ type: "PLAN_RECEIVED", plan });
     await say(plan.message, false, { type: "SET_PHASE", phase: "timetable" });
     await sleep(PACING.timetableToAdjust); // timetable -> adjust automatically after 900ms
     dispatch({ type: "SET_PHASE", phase: "adjust" });
     await say({ steps: [], text: COPY.afterBuild });
-  }, [call, say, waiting, dispatch, save, checkCourses]);
+  }, [call, say, waiting, dispatch, save, checkCourses, user.id]);
 
   // ---- adjust: Confirm enrolment ----
   const onConfirm = useCallback(async () => {
@@ -608,6 +649,7 @@ function AccountPlanner({
             onReopen={() => void runFlow(onReopen)}
             phase={phase}
             plan={state.plan}
+            partialPreview={state.partialPreview}
             prevMatch={state.prevMatch}
             rules={state.rules}
             context={context}

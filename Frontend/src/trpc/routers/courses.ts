@@ -51,7 +51,14 @@ export async function readCourseCatalogue(
       include: {
         classes: {
           where: { termId: scope.termId },
-          include: { options: true },
+          include: {
+            options: {
+              include: {
+                _count: { select: { enrolments: true } },
+                enrolments: { where: { userId }, select: { userId: true } },
+              },
+            },
+          },
         },
       },
       orderBy: { code: "asc" },
@@ -70,6 +77,7 @@ export async function readCourseCatalogue(
       timings: row.classes.flatMap((group) =>
         group.options.map((option) => ({
           id: option.id,
+          classId: group.id,
           kind: group.kind,
           label: option.label,
           day: option.day,
@@ -77,6 +85,10 @@ export async function readCourseCatalogue(
           endMinute: option.endMinute,
           room: option.room,
           enabled: option.enabled,
+          selectable:
+            option.enabled &&
+            (option._count.enrolments < option.capacity ||
+              option.enrolments.length > 0),
         })),
       ),
     }));

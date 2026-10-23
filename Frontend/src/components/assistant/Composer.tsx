@@ -8,7 +8,7 @@ import { LockIcon } from "../ui/Icons";
 /**
  * Composer: quick chips, textarea (min 62px), hint on the left, send button on the right.
  *   Enter = send, Shift+Enter = new line. Empty/whitespace never sends.
- *   Enabled only in `intake` and `adjust`.
+ *   Enabled in `intake`, `confirm`, and `adjust` so a failed build can be revised.
  *   intake chips append to the textarea (comma separated, not sent); adjust chips send at once.
  *   In `confirmed` the composer is replaced by a locked line.
  */
@@ -32,7 +32,9 @@ export function Composer({
   onSend: (text: string) => void;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
-  const open = !disabled && (phase === "intake" || phase === "adjust");
+  const open =
+    !disabled &&
+    (phase === "intake" || phase === "confirm" || phase === "adjust");
   const canSend = open && draft.trim().length > 0;
 
   useEffect(() => {
@@ -56,15 +58,19 @@ export function Composer({
   const copy =
     phase === "intake"
       ? COPY.composer.intake
-      : phase === "adjust"
-        ? COPY.composer.adjust
-        : COPY.composer.busy;
+      : phase === "confirm"
+        ? COPY.composer.confirm
+        : phase === "adjust"
+          ? COPY.composer.adjust
+          : COPY.composer.busy;
   const placeholder =
     phase === "intake"
       ? COPY.composer.intake.placeholder(friendName)
-      : phase === "adjust"
-        ? COPY.composer.adjust.placeholder
-        : COPY.composer.busy.placeholder;
+      : phase === "confirm"
+        ? COPY.composer.confirm.placeholder
+        : phase === "adjust"
+          ? COPY.composer.adjust.placeholder
+          : COPY.composer.busy.placeholder;
   const chips =
     phase === "intake"
       ? COPY.chips.intake(friendName)

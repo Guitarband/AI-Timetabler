@@ -8,6 +8,7 @@
  * Timetables and their conversations are restored from the account's database library.
  */
 
+import type { PartialAllocation } from "./partial-allocation";
 import type { PlannerSnapshot } from "./saved-timetables";
 import type {
   Confirmation,
@@ -36,6 +37,8 @@ export interface State {
   /** Rules being edited in `confirm`; after a plan arrives, mirrors plan.rules (backend may add rules). */
   rules: Rule[];
   plan: Plan | null;
+  /** A local preview after the server cannot fit every required class. Never bookable. */
+  partialPreview: PartialAllocation | null;
   /** Match % of the previous plan, for the ▲/▼ delta. null = no delta to show. */
   prevMatch: number | null;
   confirmation: Confirmation | null;
@@ -55,6 +58,7 @@ export type Action =
   | { type: "RULES_PARSED"; rules: Rule[]; readyToBuild?: boolean }
   | { type: "RULES_EDITED"; rules: Rule[] }
   | { type: "PLAN_RECEIVED"; plan: Plan }
+  | { type: "PARTIAL_PREVIEW"; preview: PartialAllocation | null }
   | { type: "REOPENED"; plan: Plan }
   | {
       type: "RULE_CHANGE_RESOLVED";
@@ -71,6 +75,7 @@ export const initialState: State = {
   items: [],
   rules: [],
   plan: null,
+  partialPreview: null,
   prevMatch: null,
   confirmation: null,
   draft: "",
@@ -122,6 +127,7 @@ export function reducer(state: State, action: Action): State {
       return {
         ...initialState,
         ...snapshot,
+        partialPreview: snapshot.partialPreview ?? null,
         phase,
         items,
         focusTick: state.focusTick + 1,
@@ -196,7 +202,7 @@ export function reducer(state: State, action: Action): State {
     case "RULES_EDITED":
       // Rules are only editable in `confirm` (brief section 6).
       return state.phase === "confirm"
-        ? { ...state, rules: action.rules }
+        ? { ...state, rules: action.rules, partialPreview: null }
         : state;
 
     case "PLAN_RECEIVED": {
@@ -208,10 +214,14 @@ export function reducer(state: State, action: Action): State {
       return {
         ...state,
         plan,
+        partialPreview: null,
         rules: plan.rules,
         prevMatch: state.plan ? state.plan.match_pct : null,
       };
     }
+
+    case "PARTIAL_PREVIEW":
+      return { ...state, partialPreview: action.preview };
 
     case "REOPENED":
       return {

@@ -169,9 +169,15 @@ class Database:
             # Opening/saving a workspace and publishing a solver draft both count
             # as use. Compare timestamps so an old snapshot cannot hide a new draft.
             candidates = db.execute(
-                """SELECT sections FROM (
-                   SELECT COALESCE(head.body->'sections', p.body->'sections',
-                                   s.snapshot #> '{plan,sections}') AS sections,
+                """SELECT sections, is_partial FROM (
+                   SELECT CASE
+                            WHEN jsonb_typeof(s.snapshot #> '{partialPreview,sections}')='array'
+                            THEN s.snapshot #> '{partialPreview,sections}'
+                            ELSE COALESCE(head.body->'sections', p.body->'sections',
+                                          s.snapshot #> '{plan,sections}')
+                          END AS sections,
+                          jsonb_typeof(s.snapshot #> '{partialPreview,sections}')='array'
+                            AS is_partial,
                           s."updatedAt" AS used_at, s.id AS source_id,
                           CASE WHEN s.id=l."activeId" THEN 1 ELSE 0 END AS active
                    FROM saved_timetable s
@@ -185,7 +191,7 @@ class Database:
                    UNION ALL
                    SELECT (SELECT jsonb_agg(jsonb_build_object('key', e."optionId"))
                            FROM timetable_entry e WHERE e."timetableId"=t.id),
-                          t."updatedAt", t.id, 0
+                          false, t."updatedAt", t.id, 0
                    FROM student_timetable t
                    WHERE t."userId"=%s AND t."termId"=%s
                      AND NOT EXISTS (
@@ -201,7 +207,12 @@ class Database:
             ).fetchall()
             keys = None
             for candidate in candidates:
-                keys = self.saved_section_keys(db, student["id"], candidate["sections"])
+                keys = self.saved_section_keys(
+                    db,
+                    student["id"],
+                    candidate["sections"],
+                    allow_partial=candidate["is_partial"],
+                )
                 if keys is not None:
                     break
             if keys is None:
@@ -221,13 +232,14 @@ class Database:
                 raise ApiError(
                     422,
                     f"{student['name']} has no saved timetable for this term yet that matches "
-                    "their current course selection. Ask them to build or open a complete "
-                    "timetable in the real planner; demo timetables cannot be matched here.",
+                    "their current course selection. Ask them to build or open a timetable "
+                    "with at least one allocated class in the real planner; demo timetables "
+                    "cannot be matched here.",
                 )
         return f"{student['name']} [{student['studentId']}]", keys
 
-    def saved_section_keys(self, db, owner, sections):
-        """Return complete active-term sections from a saved account snapshot."""
+    def saved_section_keys(self, db, owner, sections, *, allow_partial=False):
+        """Return valid active-term sections, allowing explicit partial previews."""
         if not isinstance(sections, list) or not sections:
             return None
         keys = [
@@ -250,10 +262,16 @@ class Database:
                WHERE a."userId"=%s AND a."termId"=%s""",
             (owner, self.term_id),
         ).fetchall()
+        selected_classes = {row["class_id"] for row in selected}
+        required_classes = {row["id"] for row in required}
         if (
             len(selected) != len(keys)
-            or len({row["class_id"] for row in selected}) != len(keys)
-            or {row["class_id"] for row in selected} != {row["id"] for row in required}
+            or len(selected_classes) != len(keys)
+            or not (
+                selected_classes <= required_classes
+                if allow_partial
+                else selected_classes == required_classes
+            )
         ):
             return None
         return sorted(keys)

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { config } from "./config";
+import type { PartialAllocation } from "./partial-allocation";
 import type { State } from "./reducer";
 import type { Confirmation, Context, Plan } from "./types";
 
@@ -41,6 +42,35 @@ const friend = z.object({
   total: z.number(),
   text: z.string(),
 });
+const section = z.object({
+  key: z.string(),
+  code: z.string(),
+  title: z.string(),
+  kind: z.string(),
+  section: z.string(),
+  day: z.union([
+    z.literal(1),
+    z.literal(2),
+    z.literal(3),
+    z.literal(4),
+    z.literal(5),
+  ]),
+  start: z.string(),
+  end: z.string(),
+  room: z.string(),
+  credits: z.number(),
+  with_friend: z.boolean(),
+  shared_with: z.array(z.string()).optional(),
+  changed: z.boolean(),
+});
+const partialAllocation: z.ZodType<PartialAllocation> = z.object({
+  sections: z.array(section),
+  missing: z.array(
+    z.object({ classId: z.string(), code: z.string(), kind: z.string() }),
+  ),
+  totalClasses: z.number().int().nonnegative(),
+  limited: z.boolean(),
+});
 const plan: z.ZodType<Plan> = z.object({
   plan_id: z.string().min(1),
   version: z.number().int().positive(),
@@ -55,31 +85,7 @@ const plan: z.ZodType<Plan> = z.object({
       source: z.string(),
     }),
   ),
-  sections: z
-    .array(
-      z.object({
-        key: z.string(),
-        code: z.string(),
-        title: z.string(),
-        kind: z.string(),
-        section: z.string(),
-        day: z.union([
-          z.literal(1),
-          z.literal(2),
-          z.literal(3),
-          z.literal(4),
-          z.literal(5),
-        ]),
-        start: z.string(),
-        end: z.string(),
-        room: z.string(),
-        credits: z.number(),
-        with_friend: z.boolean(),
-        shared_with: z.array(z.string()).optional(),
-        changed: z.boolean(),
-      }),
-    )
-    .min(1),
+  sections: z.array(section).min(1),
   match_pct: z.number().min(0).max(100),
   scores: z.array(
     z.object({
@@ -151,6 +157,7 @@ export const snapshotSchema = z
     version: z.literal(1),
     context,
     plan: plan.nullable(),
+    partialPreview: partialAllocation.nullable().optional(),
     confirmation: confirmation.nullable(),
     rules: z
       .array(
@@ -239,6 +246,7 @@ export function snapshotOf(state: State): PlannerSnapshot | null {
     version: 1,
     context: state.context,
     plan: state.plan,
+    partialPreview: state.partialPreview,
     confirmation: state.confirmation,
     rules: state.rules,
     phase: state.phase,

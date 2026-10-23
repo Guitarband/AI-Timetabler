@@ -1,6 +1,7 @@
 "use client";
 import { config } from "@/lib/config";
 import { COPY } from "@/lib/copy";
+import type { PartialAllocation } from "@/lib/partial-allocation";
 import { friendFirstName } from "@/lib/rules";
 import type {
   Confirmation,
@@ -29,6 +30,7 @@ import { WeekGrid } from "./WeekGrid";
 export function TimetablePanel({
   phase,
   plan,
+  partialPreview,
   prevMatch,
   rules,
   context,
@@ -41,6 +43,7 @@ export function TimetablePanel({
 }: {
   phase: Phase;
   plan: Plan | null;
+  partialPreview?: PartialAllocation | null;
   prevMatch: number | null;
   rules: Rule[];
   context: Context | null;
@@ -66,14 +69,18 @@ export function TimetablePanel({
     ? COPY.timetable.titleFinal(term)
     : plan
       ? COPY.timetable.titleDraft
-      : COPY.timetable.titleEmpty;
+      : partialPreview
+        ? COPY.timetable.titlePartial
+        : COPY.timetable.titleEmpty;
   const versionTag = confirmed
     ? COPY.timetable.tagFinal
     : plan
       ? COPY.timetable.tagDraft(plan.version)
-      : COPY.timetable.tagEmpty;
+      : partialPreview
+        ? COPY.timetable.tagPartial
+        : COPY.timetable.tagEmpty;
 
-  const sections = plan?.sections ?? [];
+  const sections = plan?.sections ?? partialPreview?.sections ?? [];
   const keptClear = plan
     ? rules
         .filter((r) => r.kind === "dayoff")
@@ -111,7 +118,12 @@ export function TimetablePanel({
               <p className="mt-[3px] text-[12px] leading-[1.45] ink-55">
                 {plan
                   ? COPY.timetable.desc(published, term)
-                  : COPY.timetable.descEmpty(published, term)}
+                  : partialPreview
+                    ? COPY.timetable.descPartial(
+                        partialPreview.sections.length,
+                        partialPreview.totalClasses,
+                      )
+                    : COPY.timetable.descEmpty(published, term)}
               </p>
             )}
           </div>
@@ -155,14 +167,57 @@ export function TimetablePanel({
           <WeekGrid
             sections={sections}
             keptClearDays={keptClear}
-            friendFirst={friendFirst}
-            placeholder={plan ? undefined : COPY.timetable.placeholder}
+            friendFirst={plan ? friendFirst : null}
+            placeholder={
+              sections.length ? undefined : COPY.timetable.placeholder
+            }
             onSectionSelect={confirmed ? undefined : onSectionSelect}
             disabled={busy || phase !== "adjust"}
             keptSections={plan?.kept_sections}
           />
         </section>
-        <Legend friendFirst={friendLegend} />
+        <Legend friendFirst={plan ? friendLegend : null} />
+
+        {partialPreview && !plan && (
+          <section
+            aria-label="Unallocated classes"
+            className="mt-[18px] border-t border-divider pt-[12px]"
+          >
+            <p className="text-sm ink-70">
+              This is a preview only. No seats are held, and it cannot be
+              confirmed until every required class fits.{" "}
+              {partialPreview.sections.length
+                ? "Friends can match against the allocated classes."
+                : "Allocate at least one class before friends can match with it."}
+            </p>
+            {partialPreview.limited && (
+              <p className="mt-2 text-sm ink-70">
+                The preview search reached its limit; a different partial
+                arrangement may fit more classes.
+              </p>
+            )}
+            <h5 className="mt-3 text-sm font-semibold">Not allocated</h5>
+            {partialPreview.missing.length ? (
+              <ul className="mt-1 list-inside list-disc text-sm ink-70">
+                {partialPreview.missing.map((item) => (
+                  <li key={item.classId}>
+                    {item.code} {item.kind}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1 text-sm ink-70">
+                The server could not validate a full timetable. Try building
+                again.
+              </p>
+            )}
+            {!!sections.length && (
+              <div className="mt-3">
+                <CourseList sections={sections} />
+              </div>
+            )}
+          </section>
+        )}
 
         {plan && (
           <div className="timetable-audit mt-[18px] grid gap-[18px]">

@@ -1,5 +1,6 @@
 export interface CourseTiming {
   id: string;
+  classId?: string;
   kind: string;
   label: string;
   day: number;
@@ -7,6 +8,7 @@ export interface CourseTiming {
   endMinute: number;
   room: string;
   enabled: boolean;
+  selectable?: boolean;
 }
 
 export interface Course {

@@ -29,6 +29,12 @@ export const COPY = {
       hint: "Enter to send · Shift+Enter for a new line",
       button: "Send",
     },
+    confirm: {
+      placeholder:
+        "Describe a new set of preferences, or edit the rules above.",
+      hint: "A new request replaces the rules above",
+      button: "Send",
+    },
     adjust: {
       placeholder:
         "e.g. Move my Wednesday workshop earlier — I start work at 15:00.",
@@ -82,14 +88,22 @@ export const COPY = {
     "I couldn't load your enrolment details, so I can't plan yet. Refresh the page to try again.",
   errorText:
     "Something went wrong on my side, so nothing has changed. Your message is back in the box — send it again when you're ready.",
+  buildErrorText:
+    "I couldn't build a timetable. Check the reason below, then change your courses or send a new request.",
+  buildPartialText: (placed: number, total: number) =>
+    `No full timetable fits. I placed ${placed} of ${total} required classes in a partial preview. Missing classes are listed beside it; this preview cannot be confirmed.`,
   timetable: {
     titleEmpty: "Weekly timetable",
     titleDraft: "Proposed timetable",
+    titlePartial: "Partial timetable preview",
     titleFinal: (term: string) => `Your ${term} timetable`,
     tagEmpty: "no draft yet",
     tagDraft: (v: number) => `draft v${v}`,
+    tagPartial: "preview only",
     tagFinal: "final",
     enrolled: "Enrolled",
+    descPartial: (placed: number, total: number) =>
+      `${placed} of ${total} required classes placed without clashes. Non-lecture classes take priority.`,
     descEmpty: (n: number, term: string) =>
       `I'll build it from the ${n} sections your faculty has already published for ${term}.`,
     desc: (n: number, term: string) =>
