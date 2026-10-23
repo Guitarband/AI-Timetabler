@@ -4,11 +4,11 @@ A Monash coursework app for planning classes around preferences and friends. `Fr
 
 ## Planner and account flow
 
-The home route `/` checks the verified Better Auth session on the server and redirects signed-out visitors to `/login`. Successful sign-in opens the planner. The portal name, initials, assistant greeting and `/account` details use the session identity, never the sample user from the timetable API. Account switching remounts the planner; session checks on focus/reconnect hide stale account data. Sign-out is available from both the planner and account page.
+The home route `/` checks the authenticated Better Auth session on the server and redirects signed-out visitors to `/login`. Successful sign-in opens the planner. The portal name, initials, assistant greeting and `/account` details use the session identity, never the sample user from the timetable API. Account switching remounts the planner; session checks on focus/reconnect hide stale account data. Sign-out is available from both the planner and account page.
 
 Sign-in, signup, recovery, reset and account screens reuse the planner's Barlow fonts, grey/blue palette, square controls and blueprint borders.
 
-The default `NEXT_PUBLIC_USE_MOCK=true` keeps the original sample courses and demo planner behavior. It does not bypass login and does not represent saved university enrolments. For a real backend, set `NEXT_PUBLIC_USE_MOCK=false`, `ENROLMENT_BACKEND_URL` to its base URL, and `TIMETABLE_BACKEND_TOKEN` to the shared service credential. The five planner operations go through protected tRPC procedures; the server forwards the verified user ID as `X-User-Id` and the service credential as a bearer token. The backend must verify that credential, use the user ID to scope all data and plan ownership, and implement the contract in `src/lib/enrolment-contract.ts`. Browser cookies and service credentials are not passed to client code. Allocate+ import remains unimplemented.
+Development defaults to mock mode unless `NEXT_PUBLIC_USE_MOCK=false`. Production defaults to the shared backend unless `NEXT_PUBLIC_USE_MOCK=true` is explicitly set. Mock mode keeps the original sample courses and demo planner behavior; it does not represent searchable university timetables. For a real backend, set `NEXT_PUBLIC_USE_MOCK=false`, `ENROLMENT_BACKEND_URL` to its base URL, and `TIMETABLE_BACKEND_TOKEN` to the shared service credential. The five planner operations go through protected tRPC procedures; the server forwards the session-derived user ID as `X-User-Id` and the service credential as a bearer token. The backend must verify that credential, use the user ID to scope all data and plan ownership, and implement the contract in `src/lib/enrolment-contract.ts`. Browser cookies and service credentials are not passed to client code. Allocate+ import remains unimplemented.
 
 ## Run locally
 
@@ -16,7 +16,7 @@ The Flask planner backend is implemented in [`../Backend`](../Backend/README.md)
 
 1. Run `npm install` in `Frontend`.
 2. Copy `.env.example` to `.env` and set `DATABASE_URL`, `BETTER_AUTH_SECRET`, and `BETTER_AUTH_URL`.
-3. For local testing without mail delivery, set `AUTH_REQUIRE_EMAIL_VERIFICATION=false`. This works with `npm run dev`; create an account at `/signup`, then sign in. For a hosted sample-data MVP demo, also set `AUTH_ALLOW_UNVERIFIED_DEMO=true` while keeping `NEXT_PUBLIC_USE_MOCK=true`. For verified registration and password recovery, configure `AUTH_EMAIL_WEBHOOK_URL` and `AUTH_EMAIL_WEBHOOK_TOKEN`. The endpoint must accept a bearer-authenticated POST with JSON `{ "to": "...", "subject": "...", "text": "..." }` and return a 2xx response.
+3. Email verification does not gate sign-up or sign-in in any mode. Create an account at `/signup`, then sign in. Configure `AUTH_EMAIL_WEBHOOK_URL` and `AUTH_EMAIL_WEBHOOK_TOKEN` for password recovery and optional manual verification emails. The endpoint must accept a bearer-authenticated POST with JSON `{ "to": "...", "subject": "...", "text": "..." }` and return a 2xx response.
 4. On a fresh PostgreSQL database, run `npm run db:deploy` and `npm run db:generate`.
 5. Run `npm run dev` and open `http://localhost:3000`.
 
@@ -36,24 +36,28 @@ On first load in a browser, the app imports any missing timetables from that acc
 
 ## Authentication
 
-Better Auth stores accounts and sessions in PostgreSQL. Students sign up with an exact `@student.monash.edu` address and a 6–12 digit student ID. Staff use an exact `@monash.edu` address. A verification email must be completed before sign-in succeeds. Password reset and verification links use the configurable mail webhook.
+Better Auth stores accounts and sessions in PostgreSQL. Students sign up with an exact `@student.monash.edu` address and a 6–12 digit student ID. Staff use an exact `@monash.edu` address. Email verification is not required for sign-up, sign-in, or app access. Password reset and optional verification emails use the configurable mail webhook.
 
-**Development and MVP demo exceptions:** `AUTH_REQUIRE_EMAIL_VERIFICATION=false` skips verification email delivery and allows unverified Monash accounts to sign in. In production this additionally requires `AUTH_ALLOW_UNVERIFIED_DEMO=true` and `NEXT_PUBLIC_USE_MOCK=true`, limiting the bypass to the sample-data planner demo. Accounts remain `emailVerified=false`; this does not prove email ownership. Do not enable the demo flag with the real planner backend. Password recovery still needs mail delivery. Real peer lookup/sharing continues to require verified student records. Set `AUTH_REQUIRE_EMAIL_VERIFICATION=true` or remove the demo flag to restore verification.
+Email verification is disabled as an access requirement in development and production, regardless of planner mode. Accounts may remain `emailVerified=false`; the app checks the Monash email domain but does not prove mailbox ownership. Password recovery still needs mail delivery. Friendship and peer-data lookup follow the same eligibility policy, including unverified registered Monash accounts. `AUTH_REQUIRE_EMAIL_VERIFICATION` and `AUTH_ALLOW_UNVERIFIED_DEMO` no longer affect this policy.
 
 The planner now uses PostgreSQL courses, alternative class times, saved student timetables and capacity-aware bookings. Prompts can identify students by name or student ID. The SQL seed creates Maya Okafor (`32000001`) and Leo Chen (`32000002`) with complete eight-class timetables. For this prototype, matching does not require sharing approval; the older peer-request endpoints remain separate. See [database setup, seed SQL and course administration](../Backend/DATABASE.md). The Prisma schema and migration include all planner tables; Flask accesses the same database through its server-only `POSTGRES_URL`.
 
 Student IDs are unique lookup keys provided by users. The app does **not** verify an ID against Monash records or prove that an email owner owns a particular ID. Do not treat the ID alone as proof of identity.
 The signup ID is locked after account creation to prevent changing the lookup identity through Better Auth's generic profile endpoint.
 
-The `/api/auth/*` route remains available for Better Auth's verification and reset callbacks. The app's account forms call `/api/trpc`. Every enrolment, timetable, preference, friendship, and peer data procedure checks a verified Monash session server-side. The planner and `/account` page also redirect unauthenticated visitors.
+The `/api/auth/*` route remains available for Better Auth's optional verification and reset callbacks. The app's account forms call `/api/trpc`. Every enrolment, timetable, preference, friendship, and peer data procedure checks an authenticated Monash session server-side. The planner and `/account` page also redirect unauthenticated visitors.
+
+## Friend requests
+
+Open **Friends** in the navigation to send a request by Monash email, accept or decline incoming requests, cancel outgoing requests, or remove a friend. The list refreshes every 15 seconds and on window focus. Requests are delivered in the app; no invitation email is sent. Missing accounts return an error; declined requests can be sent again. Only the recipient can accept or decline.
 
 ## Peer timetable access
 
-`peerData.lookup` finds a verified student by exact student ID and returns only their ID and name. `peerData.request` creates a `PENDING` request. `peerData.respond` lets only that recipient choose `ACCEPTED`, `PARTIAL`, or `DENIED`. The recipient can change a decision later with `peerData.changeAccess`. The requester can withdraw with `peerData.cancel`.
+`peerData.lookup` finds an eligible student by exact student ID and returns only their ID and name. `peerData.request` creates a `PENDING` request. `peerData.respond` lets only that recipient choose `ACCEPTED`, `PARTIAL`, or `DENIED`. The recipient can change a decision later with `peerData.changeAccess`. The requester can withdraw with `peerData.cancel`.
 
 `timetable.viewPeer` requires an accepted or partial grant and currently returns `{}`. Pending, denied, withdrawn, and absent requests return `FORBIDDEN`. This legacy peer-view endpoint remains a placeholder; account-owned saved timetables and conversations use `savedTimetables` instead.
 
-`timetable.calculate` is the existing authenticated calculation mutation with no input. Set `TIMETABLE_BACKEND_URL` to its full calculation endpoint and `TIMETABLE_BACKEND_TOKEN` to a shared service token. The frontend sends a bearer-authenticated POST whose entire JSON body is `{ "userId": "<verified caller ID>" }`. A 2xx response becomes `{ "submitted": true }`; an unavailable or unsuccessful backend returns a tRPC error. The backend reads preferences and selected peers itself. HTTPS is required, except HTTP to localhost during development. This is separate from the interactive planner's five-operation `enrolment` API described above. Peer request screens have not been built yet.
+`timetable.calculate` is the existing authenticated calculation mutation with no input. Set `TIMETABLE_BACKEND_URL` to its full calculation endpoint and `TIMETABLE_BACKEND_TOKEN` to a shared service token. The frontend sends a bearer-authenticated POST whose entire JSON body is `{ "userId": "<session-derived caller ID>" }`. A 2xx response becomes `{ "submitted": true }`; an unavailable or unsuccessful backend returns a tRPC error. The backend reads preferences and selected peers itself. HTTPS is required, except HTTP to localhost during development. This is separate from the interactive planner's five-operation `enrolment` API described above. Peer request screens have not been built yet.
 
 ## Checks
 

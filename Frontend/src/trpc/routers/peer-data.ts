@@ -1,20 +1,19 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { isMonashEmail } from "@/lib/monash-email";
+import { isEligibleUser } from "@/lib/auth-policy";
 import { isStudentId } from "@/lib/student-id";
 import { authenticatedProcedure, createTRPCRouter } from "../init";
 
 const decision = z.enum(["ACCEPTED", "PARTIAL", "DENIED"]);
 const studentLookup = z.object({
-  studentId: z.string().refine(isStudentId, "Enter a valid student ID."),
+  studentId: z.string().trim().refine(isStudentId, "Enter a valid student ID."),
 });
 
-function isVerifiedStudent<T extends { email: string; emailVerified: boolean }>(
+function isEligibleStudent<T extends { email: string; emailVerified: boolean }>(
   user: T | null,
 ): user is T {
   return (
-    !!user?.emailVerified &&
-    isMonashEmail(user.email) &&
+    isEligibleUser(user) &&
     user.email.toLowerCase().endsWith("@student.monash.edu")
   );
 }
@@ -53,7 +52,7 @@ export const peerDataRouter = createTRPCRouter({
         select: { id: true, name: true, email: true, emailVerified: true },
       });
 
-      return isVerifiedStudent(user) ? { id: user.id, name: user.name } : null;
+      return isEligibleStudent(user) ? { id: user.id, name: user.name } : null;
     }),
   request: authenticatedProcedure
     .input(studentLookup)
@@ -63,8 +62,11 @@ export const peerDataRouter = createTRPCRouter({
         select: { id: true, email: true, emailVerified: true },
       });
 
-      if (!isVerifiedStudent(recipient)) {
-        return { submitted: true };
+      if (!isEligibleStudent(recipient)) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "No student account matches that ID.",
+        });
       }
       if (recipient.id === ctx.user.id) {
         throw new TRPCError({
@@ -86,6 +88,14 @@ export const peerDataRouter = createTRPCRouter({
         ) {
           throw error;
         }
+        await ctx.prisma.peerDataRequest.updateMany({
+          where: {
+            requesterId: ctx.user.id,
+            recipientId: recipient.id,
+            status: "DENIED",
+          },
+          data: { status: "PENDING", respondedAt: null, createdAt: new Date() },
+        });
       }
 
       return { submitted: true };

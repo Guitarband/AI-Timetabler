@@ -125,6 +125,33 @@ test("a rate-limited auth operation remains rate-limited through tRPC", async ()
   }
 });
 
+test("an auth provider failure is reported as a server error without exposing its body", async () => {
+  const previous = auth.handler;
+  const previousLog = console.error;
+  const logs: string[] = [];
+  console.error = (message: string) => logs.push(message);
+  auth.handler = async () =>
+    new Response("private database error", { status: 500 });
+  try {
+    await assert.rejects(
+      appRouter.createCaller(context()).auth.signUp({
+        name: "Student",
+        email: "student@student.monash.edu",
+        password: "valid-password",
+        studentId: "12345678",
+      }),
+      {
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Account service is temporarily unavailable. Try again later.",
+      },
+    );
+    assert.deepEqual(logs, ["[auth] sign-up/email returned HTTP 500"]);
+  } finally {
+    auth.handler = previous;
+    console.error = previousLog;
+  }
+});
+
 test("the actual batched HTTP route forwards cookies without exposing auth tokens", async () => {
   const previous = auth.handler;
   auth.handler = async () => {

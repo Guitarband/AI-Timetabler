@@ -166,43 +166,44 @@ class Database:
                     r"\[([0-9]{6,12})\]$", value
                 )
                 raise SelfMatchError("student ID" if by_id else "student name")
-            # The account library is the user's selected saved timetable. Prefer its
-            # owned planner record, while still supporting imported snapshots whose
-            # planner record predates PostgreSQL persistence.
-            saved = db.execute(
-                """SELECT COALESCE(p.body->'sections', s.snapshot #> '{plan,sections}') AS sections
-                   FROM timetable_library l
-                   JOIN saved_timetable s
-                     ON s."userId"=l."userId" AND s.mode=l.mode AND s.id=l."activeId"
+            # Opening/saving a workspace and publishing a solver draft both count
+            # as use. Compare timestamps so an old snapshot cannot hide a new draft.
+            candidates = db.execute(
+                """SELECT sections FROM (
+                   SELECT COALESCE(head.body->'sections', p.body->'sections',
+                                   s.snapshot #> '{plan,sections}') AS sections,
+                          s."updatedAt" AS used_at, s.id AS source_id,
+                          CASE WHEN s.id=l."activeId" THEN 1 ELSE 0 END AS active
+                   FROM saved_timetable s
+                   LEFT JOIN timetable_library l ON l."userId"=s."userId" AND l.mode=s.mode
                    LEFT JOIN planner_plan p ON p.id=(s.snapshot #>> '{plan,plan_id}')
                    LEFT JOIN plan_family f ON f.id=p."familyId"
-                   WHERE l."userId"=%s AND l.mode='real'
+                   LEFT JOIN planner_plan head ON head.id=f.head AND head."familyId"=f.id
+                   WHERE s."userId"=%s AND s.mode='real'
                      AND s.snapshot->>'deleted' IS DISTINCT FROM 'true'
-                     AND (p.id IS NULL OR
-                       (f."ownerId"=s."userId" AND f."termId"=%s))
-                     AND jsonb_typeof(
-                       COALESCE(p.body->'sections', s.snapshot #> '{plan,sections}')
-                     )='array'""",
-                (student["id"], self.term_id),
-            ).fetchone()
-            keys = self.saved_section_keys(
-                db, student["id"], saved["sections"] if saved else None
-            )
-            if keys is None:
-                timetable = db.execute(
-                    'SELECT id FROM student_timetable WHERE "userId"=%s AND "termId"=%s',
-                    (student["id"], self.term_id),
-                ).fetchone()
-                if timetable:
-                    entries = db.execute(
-                        'SELECT "optionId" FROM timetable_entry WHERE "timetableId"=%s ORDER BY "optionId"',
-                        (timetable["id"],),
-                    ).fetchall()
-                    keys = self.saved_section_keys(
-                        db,
-                        student["id"],
-                        [{"key": entry["optionId"]} for entry in entries],
-                    )
+                     AND (p.id IS NULL OR (f."ownerId"=s."userId" AND f."termId"=%s))
+                   UNION ALL
+                   SELECT (SELECT jsonb_agg(jsonb_build_object('key', e."optionId"))
+                           FROM timetable_entry e WHERE e."timetableId"=t.id),
+                          t."updatedAt", t.id, 0
+                   FROM student_timetable t
+                   WHERE t."userId"=%s AND t."termId"=%s
+                     AND NOT EXISTS (
+                       SELECT 1 FROM saved_timetable s
+                       JOIN planner_plan p ON p.id=(s.snapshot #>> '{plan,plan_id}')
+                       JOIN planner_plan published ON published."familyId"=p."familyId"
+                       WHERE s."userId"=t."userId" AND s.mode='real'
+                         AND s.snapshot->>'deleted'='true' AND published.id=t."planId"
+                     )
+                   ) candidates
+                   ORDER BY used_at DESC, active DESC, source_id""",
+                (student["id"], self.term_id, student["id"], self.term_id),
+            ).fetchall()
+            keys = None
+            for candidate in candidates:
+                keys = self.saved_section_keys(db, student["id"], candidate["sections"])
+                if keys is not None:
+                    break
             if keys is None:
                 bookings = db.execute(
                     """SELECT e."optionId" AS option_id
@@ -219,7 +220,9 @@ class Database:
             if keys is None:
                 raise ApiError(
                     422,
-                    f"{student['name']} has no saved timetable for this term yet.",
+                    f"{student['name']} has no saved timetable for this term yet that matches "
+                    "their current course selection. Ask them to build or open a complete "
+                    "timetable in the real planner; demo timetables cannot be matched here.",
                 )
         return f"{student['name']} [{student['studentId']}]", keys
 
@@ -247,9 +250,11 @@ class Database:
                WHERE a."userId"=%s AND a."termId"=%s""",
             (owner, self.term_id),
         ).fetchall()
-        if len(selected) != len(keys) or {row["class_id"] for row in selected} != {
-            row["id"] for row in required
-        }:
+        if (
+            len(selected) != len(keys)
+            or len({row["class_id"] for row in selected}) != len(keys)
+            or {row["class_id"] for row in selected} != {row["id"] for row in required}
+        ):
             return None
         return sorted(keys)
 

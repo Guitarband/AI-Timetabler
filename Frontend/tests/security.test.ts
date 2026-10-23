@@ -80,10 +80,7 @@ test("email delivery must have an HTTPS endpoint and token", () => {
 });
 
 test("missing or non-Monash sessions cannot call protected procedures", async () => {
-  const invalidUsers = [
-    null,
-    { ...verifiedUser, email: "person@example.com" },
-  ];
+  const invalidUsers = [null, { ...verifiedUser, email: "person@example.com" }];
 
   for (const user of invalidUsers) {
     const client = caller({}, user);
@@ -224,6 +221,145 @@ test("peer requests use student ID and only the recipient can decide access", as
     id: "r1",
     requesterId: "student-1",
   });
+});
+
+test("unverified students can receive friend and peer requests; missing recipients fail honestly", async () => {
+  const target = {
+    id: "student-2",
+    name: "Friend",
+    email: "friend@student.monash.edu",
+    emailVerified: false,
+  };
+  const created: unknown[] = [];
+  let exists = true;
+  const client = caller(
+    {
+      user: {
+        findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+          assert.equal("emailVerified" in where, false);
+          assert.deepEqual(where.email, {
+            equals: target.email,
+            mode: "insensitive",
+          });
+          return exists ? target : null;
+        },
+        findUnique: async () => (exists ? target : null),
+      },
+      friendship: { create: async (args: unknown) => created.push(args) },
+      peerDataRequest: { create: async (args: unknown) => created.push(args) },
+    },
+    { ...verifiedUser, emailVerified: false },
+  );
+  await client.friends.request({ email: "  FRIEND@student.monash.edu  " });
+  await client.peerData.request({ studentId: "12345678" });
+  assert.equal(created.length, 2);
+  assert.deepEqual(await client.peerData.lookup({ studentId: "12345678" }), {
+    id: target.id,
+    name: target.name,
+  });
+  exists = false;
+  await assert.rejects(client.friends.request({ email: target.email }), {
+    code: "NOT_FOUND",
+  });
+  await assert.rejects(client.peerData.request({ studentId: "12345678" }), {
+    code: "NOT_FOUND",
+  });
+  assert.equal(created.length, 2);
+});
+
+test("declined requests can be retried without overwriting accepted or pending requests", async () => {
+  const updates: { where: { status: string }; data: { status: string } }[] = [];
+  const model = {
+    create: async () => {
+      throw { code: "P2002" };
+    },
+    updateMany: async (args: (typeof updates)[number]) => {
+      updates.push(args);
+      return { count: 1 };
+    },
+  };
+  const target = {
+    id: "student-2",
+    email: "friend@student.monash.edu",
+    emailVerified: false,
+  };
+  const client = caller({
+    user: { findFirst: async () => target, findUnique: async () => target },
+    friendship: model,
+    peerDataRequest: model,
+  });
+  await client.friends.request({ email: target.email });
+  await client.peerData.request({ studentId: "12345678" });
+  assert.deepEqual(
+    updates.map((update) => update.where.status),
+    ["DECLINED", "DENIED"],
+  );
+  assert.ok(updates.every((update) => update.data.status === "PENDING"));
+});
+
+test("friend request delivery exposes incoming requests only to the pair and only recipients can accept", async () => {
+  const request = {
+    id: "friend-1",
+    userAId: "student-1",
+    userBId: "student-2",
+    requestedById: "student-1",
+    status: "PENDING",
+    userA: verifiedUser,
+    userB: { ...verifiedUser, id: "student-2" },
+    createdAt: new Date(),
+  };
+  const db = {
+    friendship: {
+      findMany: async ({
+        where,
+      }: {
+        where: { OR: { userAId?: string; userBId?: string }[] };
+      }) =>
+        where.OR.some(
+          (entry) =>
+            entry.userAId === request.userAId ||
+            entry.userBId === request.userBId,
+        )
+          ? [request]
+          : [],
+      updateMany: async ({
+        where,
+        data,
+      }: {
+        where: {
+          requestedById: { not: string };
+          OR: { userAId?: string; userBId?: string }[];
+        };
+        data: { status: string };
+      }) => {
+        const allowed =
+          where.requestedById.not !== request.requestedById &&
+          where.OR.some(
+            (entry) =>
+              entry.userAId === request.userAId ||
+              entry.userBId === request.userBId,
+          );
+        if (allowed) request.status = data.status;
+        return { count: allowed ? 1 : 0 };
+      },
+    },
+  };
+  const sender = caller(db);
+  const recipient = caller(db, { ...verifiedUser, id: "student-2" });
+  const stranger = caller(db, { ...verifiedUser, id: "student-3" });
+  assert.equal((await sender.friends.list())[0].direction, "outgoing");
+  assert.equal((await recipient.friends.list())[0].direction, "incoming");
+  assert.deepEqual(await stranger.friends.list(), []);
+  await assert.rejects(
+    sender.friends.respond({ id: request.id, action: "accept" }),
+    { code: "NOT_FOUND" },
+  );
+  await assert.rejects(
+    stranger.friends.respond({ id: request.id, action: "accept" }),
+    { code: "NOT_FOUND" },
+  );
+  await recipient.friends.respond({ id: request.id, action: "accept" });
+  assert.equal(request.status, "ACCEPTED");
 });
 
 test("peer timetable placeholder requires an accepted or partial grant", async () => {

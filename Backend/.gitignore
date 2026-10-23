@@ -8,3 +8,5 @@ htmlcov/
 .env
 instance/
 *.egg-info/
+
+.pytest-tmp-*/

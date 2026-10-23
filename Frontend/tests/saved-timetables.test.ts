@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { before, test } from "node:test";
+import { config } from "../src/lib/config";
 import { initialState, reducer } from "../src/lib/reducer";
 import {
   type PlannerSnapshot,
@@ -411,6 +412,22 @@ test("saved conversations survive fresh callers and another account cannot read 
   assert.equal("snapshot" in listed.entries[0], false);
 });
 
+test("opening an older timetable makes it active and records use without changing its revision", async () => {
+  const db = memoryDatabase();
+  const api = caller(db);
+  const first = input();
+  const second = input();
+  await api.save({ accountId: user.id, ...first });
+  await api.save({ accountId: user.id, ...second });
+  assert.equal((await api.list({ accountId: user.id })).activeId, second.id);
+  const started = Date.now();
+  const reopened = await api.open({ accountId: user.id, id: first.id });
+  assert.equal((await api.list({ accountId: user.id })).activeId, first.id);
+  assert.ok(Date.parse(reopened.updatedAt) >= started);
+  assert.equal(reopened.revision, 1);
+  assert.deepEqual(reopened.snapshot, first.snapshot);
+});
+
 test("database saves are idempotent and reject stale revisions without losing newer chat", async () => {
   const db = memoryDatabase();
   const api = caller(db);
@@ -458,7 +475,8 @@ test("demo and real libraries are isolated on the server", async () => {
   const db = memoryDatabase();
   const value = { accountId: user.id, ...input() };
   await caller(db).save(value);
-  process.env.NEXT_PUBLIC_USE_MOCK = "false";
+  const previousMode = config.useMock;
+  config.useMock = false;
   try {
     assert.equal(
       (await caller(db).list({ accountId: user.id })).entries.length,
@@ -469,7 +487,7 @@ test("demo and real libraries are isolated on the server", async () => {
       { code: "NOT_FOUND" },
     );
   } finally {
-    process.env.NEXT_PUBLIC_USE_MOCK = "true";
+    config.useMock = previousMode;
   }
 });
 
@@ -602,7 +620,8 @@ test("reopening recovers an adjustment and booking committed before the browser 
       },
     },
   };
-  process.env.NEXT_PUBLIC_USE_MOCK = "false";
+  const previousMode = config.useMock;
+  config.useMock = false;
   try {
     const created = await caller(database).save({
       accountId: user.id,
@@ -627,7 +646,7 @@ test("reopening recovers an adjustment and booking committed before the browser 
     assert.equal(again.revision, 2);
     assert.deepEqual(again.snapshot.items, recovered.snapshot.items);
   } finally {
-    process.env.NEXT_PUBLIC_USE_MOCK = "true";
+    config.useMock = previousMode;
   }
 });
 

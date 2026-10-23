@@ -95,6 +95,13 @@ export function PortalNav({
               Courses
             </Link>
             <Link
+              href="/friends"
+              onClick={navigate("/friends")}
+              aria-current={active === "friends" ? "page" : undefined}
+            >
+              Friends
+            </Link>
+            <Link
               href="/account"
               onClick={navigate("/account")}
               aria-current={active === "account" ? "page" : undefined}

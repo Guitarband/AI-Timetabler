@@ -172,6 +172,26 @@ test("real planner requests use only the authenticated identity and keep tokens 
       new Headers(requests[5].options?.headers).get("X-User-Id"),
       user.id,
     );
+    const originalLog = console.error;
+    const logs: string[] = [];
+    console.error = (message: string) => logs.push(message);
+    try {
+      globalThis.fetch = async () =>
+        Response.json(
+          { detail: "A valid backend service token is required." },
+          { status: 401 },
+        );
+      await assert.rejects(() => caller().enrolment.context(), {
+        code: "BAD_GATEWAY",
+        message:
+          "The enrolment backend rejected the service credentials. Check TIMETABLE_BACKEND_TOKEN on both services.",
+      });
+      assert.deepEqual(logs, [
+        "[enrolment] context returned HTTP 401: service authentication failed",
+      ]);
+    } finally {
+      console.error = originalLog;
+    }
     globalThis.fetch = async () =>
       new Response("private backend error", { status: 500 });
     await assert.rejects(() => caller().enrolment.context(), {

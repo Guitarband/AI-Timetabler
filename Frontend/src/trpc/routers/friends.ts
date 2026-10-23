@@ -31,7 +31,11 @@ export const friendsRouter = createTRPCRouter({
   request: authenticatedProcedure
     .input(
       z.object({
-        email: z.email().refine(isMonashEmail, "Use a Monash email address."),
+        email: z
+          .string()
+          .trim()
+          .pipe(z.email())
+          .refine(isMonashEmail, "Use a Monash email address."),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -46,12 +50,16 @@ export const friendsRouter = createTRPCRouter({
       const target = await ctx.prisma.user.findFirst({
         where: {
           email: { equals: email, mode: "insensitive" },
-          emailVerified: true,
         },
         select: { id: true },
       });
 
-      if (!target) return { submitted: true };
+      if (!target)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message:
+            "No account matches that Monash email. Ask your friend to sign up first.",
+        });
 
       const [userAId, userBId] = [ctx.user.id, target.id].sort();
       try {
@@ -71,6 +79,16 @@ export const friendsRouter = createTRPCRouter({
         ) {
           throw error;
         }
+        // A declined pair still occupies the unique key. Sending again must
+        // create a visible pending request, without overwriting an accepted one.
+        await ctx.prisma.friendship.updateMany({
+          where: { userAId, userBId, status: "DECLINED" },
+          data: {
+            status: "PENDING",
+            requestedById: ctx.user.id,
+            createdAt: new Date(),
+          },
+        });
       }
 
       return { submitted: true };

@@ -57,6 +57,16 @@ async function request<T>(
       signal: AbortSignal.timeout(30_000),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        console.error(
+          `[enrolment] ${operation} returned HTTP ${response.status}: service authentication failed`,
+        );
+        throw new TRPCError({
+          code: "BAD_GATEWAY",
+          message:
+            "The enrolment backend rejected the service credentials. Check TIMETABLE_BACKEND_TOKEN on both services.",
+        });
+      }
       const codes = {
         400: "BAD_REQUEST",
         404: "NOT_FOUND",
@@ -71,11 +81,18 @@ async function request<T>(
       if (code && typeof payload?.detail === "string") {
         throw new TRPCError({ code, message: payload.detail.slice(0, 500) });
       }
-      throw new Error("Backend request failed");
+      console.error(`[enrolment] ${operation} returned HTTP ${response.status}`);
+      throw new TRPCError({
+        code: "BAD_GATEWAY",
+        message: "The enrolment backend is unavailable. Try again.",
+      });
     }
     return (await response.json()) as T;
   } catch (error) {
     if (error instanceof TRPCError) throw error;
+    console.error(
+      `[enrolment] ${operation} request failed: ${error instanceof Error ? error.message : "unknown error"}`,
+    );
     throw new TRPCError({
       code: "BAD_GATEWAY",
       message: "The enrolment backend is unavailable. Try again.",

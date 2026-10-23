@@ -160,6 +160,12 @@ export const savedTimetablesRouter = createTRPCRouter({
             }
           }
         }
+        // Opening an older workspace is a use, even when its contents did not
+        // change. Match requests compare this timestamp with solver publication.
+        row = await tx.savedTimetable.update({
+          where,
+          data: { updatedAt: new Date() },
+        });
         await tx.timetableLibrary.upsert({
           where: { userId_mode: scope },
           create: { ...scope, activeId: row.id },

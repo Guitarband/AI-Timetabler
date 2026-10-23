@@ -13,6 +13,7 @@ import psycopg
 import pytest
 from dotenv import dotenv_values
 from psycopg import sql
+from psycopg.types.json import Jsonb
 
 from enrolment.ai import FixtureParser
 from enrolment.errors import ApiError
@@ -56,6 +57,12 @@ def database():
                 ).read_text()
             )
             db.execute(seed_sql())
+            db.execute(
+                (
+                    ROOT.parent
+                    / "Frontend/prisma/migrations/20261017_saved_timetables_chat/migration.sql"
+                ).read_text()
+            )
         yield isolated
     finally:
         # Only the random schema created by this fixture is eligible for cleanup.
@@ -202,6 +209,77 @@ def test_latest_saved_timetable_is_used_for_queries(database, owner):
                 'UPDATE timetable_entry SET "optionId"=%s WHERE "timetableId"=%s AND "classId"=%s',
                 ("phil-s01", "sample-maya:2026-fall", "phil-1100-seminar"),
             )
+
+
+def test_matching_uses_most_recent_valid_workspace_or_published_draft(database, owner):
+    student_id = str(int(uuid4().hex[:10], 16)).zfill(12)
+    plan = service(database, owner).build(owner, [])
+    original = sorted(s.key for s in plan.sections)
+    replacement = "phil-s02" if "phil-s01" in original else "phil-s01"
+    alternate = sorted(replacement if key.startswith("phil-s") else key for key in original)
+    snapshot = {
+        "plan": {"plan_id": "legacy-import", "sections": [{"key": key} for key in alternate]}
+    }
+    with database.connection() as db:
+        db.execute('UPDATE "user" SET "studentId"=%s WHERE id=%s', (student_id, owner))
+        db.execute(
+            'UPDATE student_timetable SET "updatedAt"=%s WHERE "userId"=%s', ("2026-01-02", owner)
+        )
+        db.execute(
+            """INSERT INTO saved_timetable ("userId",mode,id,name,term,snapshot,"mutationId","updatedAt")
+                      VALUES (%s,'real','older','Older','Fall',%s,'write-1','2026-01-01')""",
+            (owner, Jsonb(snapshot)),
+        )
+        db.execute(
+            "INSERT INTO timetable_library (\"userId\",mode,\"activeId\") VALUES (%s,'real','older')",
+            (owner,),
+        )
+    # A newer solver publication wins even before the browser autosaves it.
+    assert database.resolve_student(student_id, "viewer")[1] == original
+    with database.connection() as db:
+        db.execute(
+            'UPDATE saved_timetable SET "updatedAt"=%s WHERE "userId"=%s', ("2026-01-03", owner)
+        )
+    # Reopening an older workspace records new use and makes it the match target.
+    assert database.resolve_student(student_id, "viewer")[1] == alternate
+    with database.connection() as db:
+        db.execute('UPDATE timetable_library SET "activeId"=NULL WHERE "userId"=%s', (owner,))
+    # Missing active pointers do not hide saved timetables.
+    assert database.resolve_student(student_id, "viewer")[1] == alternate
+    with database.connection() as db:
+        db.execute(
+            """INSERT INTO saved_timetable ("userId",mode,id,name,term,snapshot,"mutationId","updatedAt")
+                      VALUES (%s,'real','empty','Conversation only','Fall','{}','write-2','2026-01-04')""",
+            (owner,),
+        )
+    assert database.resolve_student(student_id, "viewer")[1] == alternate
+    with database.connection() as db:
+        db.execute(
+            "UPDATE saved_timetable SET snapshot=%s WHERE \"userId\"=%s AND id='older'",
+            (Jsonb({**snapshot, "deleted": True}), owner),
+        )
+    assert database.resolve_student(student_id, "viewer")[1] == original
+
+
+def test_matching_follows_owned_plan_family_head_and_rejects_duplicate_classes(database, owner):
+    student_id = str(int(uuid4().hex[:10], 16)).zfill(12)
+    first = service(database, owner).build(owner, [])
+    second = service(database, owner).keep(owner, first.plan_id, first.sections[0].key, True)
+    original = sorted(s.key for s in second.sections)
+    with database.connection() as db:
+        db.execute('UPDATE "user" SET "studentId"=%s WHERE id=%s', (student_id, owner))
+        # A stale snapshot has no usable sections; authoritative family head wins.
+        db.execute(
+            """INSERT INTO saved_timetable ("userId",mode,id,name,term,snapshot,"mutationId","updatedAt")
+                      VALUES (%s,'real','active','Active','Fall',%s,'write-1',now()+interval '1 minute')""",
+            (owner, Jsonb({"plan": {"plan_id": first.plan_id, "sections": []}})),
+        )
+    assert database.resolve_student(student_id, "viewer")[1] == original
+    # Duplicating a class option cannot manufacture a complete timetable.
+    with database.connection() as db:
+        sections = [{"key": key} for key in original]
+        sections.append({"key": "phil-s02" if "phil-s01" in original else "phil-s01"})
+        assert database.saved_section_keys(db, owner, sections) is None
 
 
 @pytest.fixture

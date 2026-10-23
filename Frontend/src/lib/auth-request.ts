@@ -41,6 +41,14 @@ export async function requestAuth(
         message: "Too many attempts. Wait before trying again.",
       });
     }
+    if (response.status >= 500) {
+      // Keep credentials and provider response bodies out of production logs.
+      console.error(`[auth] ${endpoint} returned HTTP ${response.status}`);
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Account service is temporarily unavailable. Try again later.",
+      });
+    }
     throw new TRPCError({
       code: endpoint === "sign-in/email" ? "UNAUTHORIZED" : "BAD_REQUEST",
       message: failureMessage,
